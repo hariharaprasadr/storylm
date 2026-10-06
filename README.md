@@ -1,4 +1,4 @@
-# TinyLM: 1.67M Parameter Nano Language Model
+# TinyLM: 1.67M Parameter Tiny Language Model
 
 An edge-native, ultra-compact generative language model engineered for resource-constrained microcontrollers and embedded devices (such as the ESP32-S3), accompanied by a mathematical forward-pass tracer and an interactive web visualizer.
 
@@ -8,7 +8,7 @@ An edge-native, ultra-compact generative language model engineered for resource-
 
 ## Key Specifications
 
-| Engineering Metric | TinyLM (Nano SLM) | Standard Local LLM | Frontier Cloud LLM |
+| Engineering Metric | TinyLM (Tiny SLM) | Standard Local LLM | Frontier Cloud LLM |
 | :--- | :--- | :--- | :--- |
 | **Parameter Count** | **1,671,296 (1.67M)** | 7,000,000,000 (7B) | ~1,800,000,000,000 (1.8T) |
 | **Layers / Dim / Heads** | **8 layers / d=128 / 8 heads** | 32 layers / d=4096 / 32 heads | 96+ layers / d=12288+ |
@@ -108,7 +108,7 @@ This serves `web/index.html`, which features:
   - Observe multi-head attention weights and FFN feature activations.
   - Peek via the "logit lens" to see what the model would guess at intermediate layers.
   - Examine greedy next-token probability distributions and autoregressive loops.
-- **Nano LM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
+- **TinyLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
 
 ### 4. Verify KV-Cache Parity & Performance
 Verify that KV-cache output is numerically identical to standard full-context recomputation:

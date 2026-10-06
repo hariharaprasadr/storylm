@@ -1,7 +1,7 @@
 .PHONY: help story test web trace info train clean
 
 help:
-	@echo "TinyLM 1.67M Nano Language Model"
+	@echo "TinyLM 1.67M Tiny Language Model"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make story   - Generate a bedtime story from checkpoints/embedded_big.pt"

@@ -81,7 +81,7 @@ def cmd_web(args):
 def cmd_info(args):
     """Print model checkpoint information and dataset overview."""
     print("=" * 65)
-    print("  TinyLM 1.67M Parameter Nano Language Model")
+    print("  TinyLM 1.67M Parameter Tiny Language Model")
     print("=" * 65)
     vocab_path = os.path.join(ROOT, "data/vocab.json")
     if os.path.exists(vocab_path):
@@ -107,7 +107,7 @@ def cmd_info(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TinyLM: Nano Model CLI & Web Visualizer")
+    parser = argparse.ArgumentParser(description="TinyLM: Tiny Model CLI & Web Visualizer")
     subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
 
     # story

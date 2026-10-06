@@ -1,4 +1,4 @@
-"""TinyLM: 1.67M parameter Nano Language Model for edge & embedded devices."""
+"""TinyLM: 1.67M parameter Tiny Language Model for edge & embedded devices."""
 
 from .model import (
     Config as TinyLMConfig,

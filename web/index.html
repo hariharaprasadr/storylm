@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nano LM Architecture & Comparison: 1.67M TinyLM vs. Regular LLM</title>
-  <meta name="description" content="Detailed architectural diagram, component breakdown, and deep comparison of the 1.67M parameter Nano Language Model versus standard LLMs.">
+  <title>TinyLM Architecture & Comparison: 1.67M Model vs. Regular LLM</title>
+  <meta name="description" content="Detailed architectural diagram, component breakdown, and deep comparison of the 1.67M parameter TinyLM versus standard LLMs.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -445,7 +445,7 @@
       font-weight: 700;
       color: #fff;
     }
-    .cell-nano {
+    .cell-tiny {
       color: #a5b4fc;
       font-weight: 600;
       background: rgba(99, 102, 241, 0.04);
@@ -453,7 +453,7 @@
     .cell-normal {
       color: #cbd5e1;
     }
-    .pill-nano {
+    .pill-tiny {
       display: inline-block;
       background: rgba(99, 102, 241, 0.2);
       color: #a5b4fc;
@@ -1247,14 +1247,14 @@
   <header>
     <div class="container nav-inner">
       <div class="brand">
-        <span>Nano LM</span>
+        <span>TinyLM</span>
         <span class="brand-badge">TinyLM 1.67M</span>
       </div>
       <ul class="nav-links">
         <li><a href="#architecture">Architecture Diagram</a></li>
         <li><a href="#components">Component Details</a></li>
         <li><a href="#walkthrough">Under the Hood</a></li>
-        <li><a href="#comparison">Nano LM vs Regular LLM</a></li>
+        <li><a href="#comparison">TinyLM vs Regular LLM</a></li>
       </ul>
     </div>
   </header>
@@ -1267,7 +1267,7 @@
           <span class="pulse-dot"></span>
           <span>ESP32-S3 Microcontroller Bare-Metal AI</span>
         </div>
-        <h1>The Nano Language Model</h1>
+        <h1>The Tiny Language Model</h1>
         <p class="hero-subtitle">
           Complete architectural schematic, component-by-component engineering breakdown, and technical comparison against standard multi-billion parameter LLMs.
         </p>
@@ -1279,7 +1279,7 @@
       <div class="container">
         <div class="section-header">
           <div class="section-tag">System Schematic</div>
-          <h2 class="section-title">Nano LM Architecture Diagram</h2>
+          <h2 class="section-title">TinyLM Architecture Diagram</h2>
           <p class="section-desc">Dataflow and tensor dimensions through the 1,671,296 parameter decoder-only Transformer.</p>
         </div>
 
@@ -1627,12 +1627,12 @@
       </div>
     </section>
 
-    <!-- 4. COMPARISON: NANO LM VS REGULAR LLM -->
+    <!-- 4. COMPARISON: TINYLM VS REGULAR LLM -->
     <section id="comparison" class="comparison-section">
       <div class="container">
         <div class="section-header">
           <div class="section-tag">Comprehensive Analysis</div>
-          <h2 class="section-title">Nano LM vs. Regular LLM</h2>
+          <h2 class="section-title">TinyLM vs. Regular LLM</h2>
           <p class="section-desc">Comparing an edge-native embedded appliance model against standard multi-billion parameter foundation models.</p>
         </div>
 
@@ -1641,7 +1641,7 @@
             <thead>
               <tr>
                 <th>Engineering Attribute</th>
-                <th>Nano LM (TinyLM 1.67M) <span class="pill-nano">Embedded Target</span></th>
+                <th>TinyLM (1.67M) <span class="pill-tiny">Embedded Target</span></th>
                 <th>Standard Local LLM (7B&ndash;8B INT4)</th>
                 <th>Frontier Cloud LLM (GPT-4 / Claude)</th>
               </tr>
@@ -1649,67 +1649,67 @@
             <tbody>
               <tr>
                 <td class="cell-dim">Parameter Count</td>
-                <td class="cell-nano">1,671,296 (1.67 Million)</td>
+                <td class="cell-tiny">1,671,296 (1.67 Million)</td>
                 <td class="cell-normal">7,000,000,000 &ndash; 8,000,000,000 (7B&ndash;8B)</td>
                 <td class="cell-normal">&gt; 1,000,000,000,000 (&gt; 1 Trillion MoE)</td>
               </tr>
               <tr>
                 <td class="cell-dim">Storage / Weights</td>
-                <td class="cell-nano">867 KiB (INT4 packed)</td>
+                <td class="cell-tiny">867 KiB (INT4 packed)</td>
                 <td class="cell-normal">3.8 GB &ndash; 5.0 GB (INT4/GGUF)</td>
                 <td class="cell-normal">Hundreds of GBs &ndash; Terabytes</td>
               </tr>
               <tr>
                 <td class="cell-dim">KV-Cache Working RAM</td>
-                <td class="cell-nano">768 KiB (INT8, ctx 384)</td>
+                <td class="cell-tiny">768 KiB (INT8, ctx 384)</td>
                 <td class="cell-normal">512 MB &ndash; 2.0 GB (ctx 4K&ndash;8K)</td>
                 <td class="cell-normal">Tens of Gigabytes across sessions</td>
               </tr>
               <tr>
                 <td class="cell-dim">Target Hardware</td>
-                <td class="cell-nano">ESP32-S3 Microcontroller (240 MHz LX7)</td>
+                <td class="cell-tiny">ESP32-S3 Microcontroller (240 MHz LX7)</td>
                 <td class="cell-normal">NVIDIA RTX 3060 / 4090 / Apple M-series</td>
                 <td class="cell-normal">Datacenter Clusters (8&times; NVIDIA H100)</td>
               </tr>
               <tr>
                 <td class="cell-dim">Power Consumption</td>
-                <td class="cell-nano">~0.8 &ndash; 1.5 Watts (Battery powered)</td>
+                <td class="cell-tiny">~0.8 &ndash; 1.5 Watts (Battery powered)</td>
                 <td class="cell-normal">150 &ndash; 350 Watts (Mains power)</td>
                 <td class="cell-normal">Kilowatts per server node</td>
               </tr>
               <tr>
                 <td class="cell-dim">Hardware Unit Cost</td>
-                <td class="cell-nano">$10 &ndash; $15 (Complete appliance)</td>
+                <td class="cell-tiny">$10 &ndash; $15 (Complete appliance)</td>
                 <td class="cell-normal">$800 &ndash; $3,000 (Computer + GPU)</td>
                 <td class="cell-normal">$30,000+ per GPU accelerator</td>
               </tr>
               <tr>
                 <td class="cell-dim">Tokenizer & Vocab</td>
-                <td class="cell-nano">752 Closed IDs (No subwords, no byte fallback)</td>
+                <td class="cell-tiny">752 Closed IDs (No subwords, no byte fallback)</td>
                 <td class="cell-normal">32,000 &ndash; 128,256 Subword BPE</td>
                 <td class="cell-normal">100,000 &ndash; 200,000 Multilingual BPE</td>
               </tr>
               <tr>
                 <td class="cell-dim">Output Head MACs/Token</td>
-                <td class="cell-nano">96,256 MACs (752 &times; 128)</td>
+                <td class="cell-tiny">96,256 MACs (752 &times; 128)</td>
                 <td class="cell-normal">~524,000,000 MACs (128,000 &times; 4,096)</td>
                 <td class="cell-normal">Billions of MACs per token</td>
               </tr>
               <tr>
                 <td class="cell-dim">Safety & Hallucination</td>
-                <td class="cell-nano">Guaranteed by closed vocabulary & C++ validator</td>
+                <td class="cell-tiny">Guaranteed by closed vocabulary & C++ validator</td>
                 <td class="cell-normal">Probabilistic RLHF / Guardrail filters (Jailbreakable)</td>
                 <td class="cell-normal">Alignment wrappers & moderation API endpoints</td>
               </tr>
               <tr>
                 <td class="cell-dim">Speech / Audio Narration</td>
-                <td class="cell-nano">Directly keyed to 16 kHz ADPCM human voice clips</td>
+                <td class="cell-tiny">Directly keyed to 16 kHz ADPCM human voice clips</td>
                 <td class="cell-normal">Requires heavy neural TTS model (GBs of extra RAM)</td>
                 <td class="cell-normal">Cloud streaming voice synthesis API</td>
               </tr>
               <tr>
                 <td class="cell-dim">Network & Privacy</td>
-                <td class="cell-nano">100% Offline, air-gapped, zero telemetry</td>
+                <td class="cell-tiny">100% Offline, air-gapped, zero telemetry</td>
                 <td class="cell-normal">Local runtime (offline capable)</td>
                 <td class="cell-normal">Requires active WAN internet connection</td>
               </tr>
@@ -1722,28 +1722,28 @@
           <div class="breakdown-card">
             <h4>&#128187; 1. Computational Scale</h4>
             <p>
-              A standard 7B model requires roughly <strong>4,200&times; more parameters</strong> and &gt;5,000&times; more multiply-accumulate operations per token than the Nano LM. The Nano LM fits entirely into the 8 MB PSRAM of an embedded microcontroller with 74% free safety headroom remaining.
+              A standard 7B model requires roughly <strong>4,200&times; more parameters</strong> and &gt;5,000&times; more multiply-accumulate operations per token than the TinyLM. The TinyLM fits entirely into the 8 MB PSRAM of an embedded microcontroller with 74% free safety headroom remaining.
             </p>
           </div>
 
           <div class="breakdown-card">
             <h4>&#128274; 2. Vocabulary & Hallucination Boundary</h4>
             <p>
-              Regular LLMs can assemble arbitrary toxic, violent, or dangerous strings because subword BPE permits open generation. In contrast, the Nano LM's output projection head contains only 752 rows: unapproved words simply have no representation in silicon.
+              Regular LLMs can assemble arbitrary toxic, violent, or dangerous strings because subword BPE permits open generation. In contrast, the TinyLM's output projection head contains only 752 rows: unapproved words simply have no representation in silicon.
             </p>
           </div>
 
           <div class="breakdown-card">
             <h4>&#9889; 3. Head Cost & Memory Bandwidth</h4>
             <p>
-              In open LLMs, the classification head (e.g. 128k vocab &times; 4096 dim) accounts for over 60% of inference latency. The Nano LM's tied 752-word head requires only 96K operations per token, allowing seamless 250+ tokens/sec execution without starving hardware memory channels.
+              In open LLMs, the classification head (e.g. 128k vocab &times; 4096 dim) accounts for over 60% of inference latency. The TinyLM's tied 752-word head requires only 96K operations per token, allowing seamless 250+ tokens/sec execution without starving hardware memory channels.
             </p>
           </div>
 
           <div class="breakdown-card">
             <h4>&#127911; 4. Zero-Underrun Audio Coupling</h4>
             <p>
-              Because the Nano LM drafts an entire 23-line bedtime story in under 1 second, generation is ~30&times; faster than human playback (111 seconds). Sentences are passed to an IMA ADPCM audio DMA stream with guaranteed zero audio glitching or buffer starvation.
+              Because TinyLM drafts an entire 23-line bedtime story in under 1 second, generation is ~30&times; faster than human playback (111 seconds). Sentences are passed to an IMA ADPCM audio DMA stream with guaranteed zero audio glitching or buffer starvation.
             </p>
           </div>
         </div>
@@ -1754,7 +1754,7 @@
   <!-- Footer -->
   <footer>
     <div class="container">
-      <p><strong>M5StickS3 Nano LM Architecture & Comparison Specification</strong></p>
+      <p><strong>M5StickS3 TinyLM Architecture & Comparison Specification</strong></p>
       <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-dim);">
         Decoder-only 1.67M Transformer &bull; Tied Embeddings &bull; RoPE &bull; RMSNorm &bull; INT4 Quantized
       </p>
