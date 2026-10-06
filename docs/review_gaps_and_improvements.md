@@ -2,7 +2,7 @@
 
 Scope: every project markdown file -
 [`README.md`](../README.md),
-[`m5sticks3_offline_character_storyteller_project.md`](../m5sticks3_offline_character_storyteller_project.md) (the plan),
+the original engineering plan (the predates-this-repo design document),
 [`docs/story_format.md`](story_format.md),
 [`docs/tiny_model.md`](tiny_model.md),
 [`docs/how_it_works.md`](how_it_works.md),
@@ -74,7 +74,7 @@ another doc.
 | F13 | Plan §6.4: special tokens get "fixed deterministic byte encodings" | Word-level ids, no bytes | plan §6.4 |
 | F14 | Plan §7.3 / §20.8: "300-1,000 hand-authored stories", "create 100 original stories" | The corpus is engine-generated | plan §7.3, §20 |
 | F15 | Plan §8.2 deps (transformers, datasets, tokenizers, sentencepiece...) | `requirements.txt` is torch + numpy | plan §8.2 |
-| F16 | Plan §10.2 layout (`m5story/`, `docs/architecture.md`, `characters.yaml`, `tools/`, `firmware/main/`...) | Most of it doesn't exist; `series.json`, not YAML | plan §10.2 |
+| F16 | Plan §10.2 layout (`docs/architecture.md`, `characters.yaml`, `tools/`, `firmware/main/`...) | Most of it doesn't exist; `series.json`, not YAML | plan §10.2 |
 | F17 | Plan §16: `training/evaluate.py`, `tools/export_embedded_model.py --tokenizer artifacts/tokenizer`, `checkpoints/best` | None exist; the checkpoint is `embedded.pt`; there is no tokenizer dir; the venv is created twice | plan §16 |
 | F18 | Plan §11.1 example "Milo found a blue key in the garden" | Stale character and prop | plan §11.1 |
 | F19 | Plan §13.1 timeout "20-40 s"; §13.3 "keep 20-50 fallback stories" | Generation projects at ≤13 s; the engine replaces a static fallback library | plan §13 |

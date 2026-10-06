@@ -7,9 +7,9 @@ and the speaker. Everything here is enforced by
 `make test`.
 
 **Operative budget: 200-250 words per story.** This supersedes the 40-70 word
-target in the engineering plan (`m5sticks3_offline_character_storyteller_project.md`
-section 2). The device is a bedtime device for 6-8 year olds: one story is
-about two minutes of narration and roughly three screens of text.
+target in the original engineering plan. The device is a bedtime device for
+6-8 year olds: one story is about two minutes of narration and roughly three
+screens of text.
 
 ## 1. Prompt line
 

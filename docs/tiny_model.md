@@ -36,7 +36,7 @@ Two possible jobs, same architecture family:
 
 **Build B, keep the engine as the fallback tier.** A is nearly free but adds
 little over the deterministic dice; B is what "a tiny language model on the
-stick" means.
+device" means.
 
 ## 2. The token table is the safety boundary
 

@@ -6,6 +6,48 @@ An edge-native, ultra-compact generative language model engineered for resource-
 
 ---
 
+## Backstory: from a cloud microphone to a 1.67M model
+
+**It started with streaming audio to the cloud.** My first experiments with
+pocket-sized ESP32-S3 boards (a tiny screen, a button, a microphone and a
+speaker) took the obvious shape: stream the microphone to a server, run
+speech-to-text, a cloud LLM and text-to-speech there, stream the audio back.
+The audio pipeline worked. But every demo exposed the same failure: without
+Wi-Fi, a gateway and someone else's API, the gadget was a paperweight — and
+every word spoken to it left the house.
+
+**The requirements flipped the design.** The real goal was a bedtime device
+for a 6-8 year old: the child picks a character and a mode, and the device
+writes and narrates a 200-250 word story that always ends with everyone asleep.
+The plan allowed *no cloud service, no LAN server, no runtime Internet after
+flashing*. With the network gone, neural TTS is out too, so narration has to
+be pre-recorded clips — which means every word the device can ever say must be
+known in advance.
+
+**A story engine came before the model.** The first build was a deterministic
+C++ story engine: five character worlds, a fixed "sleep spine" plot skeleton,
+sixteen beat tables and a validator. It solved narration and safety, but it is
+dice: beats are picked from pools, and every story is assembled, never written.
+
+**The engine became the teacher.** The same tables generate the training
+corpus and the entire vocabulary: 752 ids = 30 control tokens + 722 words,
+closed by construction, so a model trained on it can never emit a word without
+a narration clip. Two architectures were on the table: a ~50K-parameter beat
+selector that only picks recipe steps, or a word-level generator that writes
+the text itself. The beat selector adds little over the dice; the word-level
+model is the whole point. So a 1.67M-parameter decoder-only Transformer
+(8 layers, d=128, tied embeddings, RoPE, RMSNorm, GELU, no biases) was trained
+from scratch: a few thousand steps on a laptop CPU for the baseline checkpoint,
+then the expanded 57,600-story corpus on a rented T4 GPU for the big one.
+Evaluation was never perplexity — sampled stories go back through the engine's
+canonicaliser and the firmware validator, the same gate the device will use.
+
+**That model is TinyLM.** Somewhere along the way the interesting artifact
+stopped being the appliance and became the model: a complete language model —
+tokenizer, training loop, checkpoints, a KV cache proven token-identical to
+full recompute (4.3x faster), a forward-pass tracer and a 30-step browser
+walkthrough — that fits in 867 KiB of INT4 flash. This repo holds it.
+
 ## Key Specifications
 
 | Engineering Metric | TinyLM (Tiny SLM) | Standard Local LLM | Frontier Cloud LLM |

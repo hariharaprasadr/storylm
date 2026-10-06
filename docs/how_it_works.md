@@ -23,7 +23,7 @@ computer like a laptop. It has:
 
 ```mermaid
 flowchart TB
-    subgraph box["📦 The magic box (M5StickS3)"]
+    subgraph box["📦 The magic box"]
         C["🧠 Tiny brain<br/>(ESP32-S3 chip)"]
         F["📚 Big shelf of stuff<br/>(8 MB flash)"]
         M["🗃️ Middle shelf<br/>(8 MB memory)"]
