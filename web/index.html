@@ -1251,6 +1251,7 @@
         <span class="brand-badge">TinyLM 1.67M</span>
       </div>
       <ul class="nav-links">
+        <li><a href="#backstory">Backstory</a></li>
         <li><a href="#architecture">Architecture Diagram</a></li>
         <li><a href="#components">Component Details</a></li>
         <li><a href="#walkthrough">Under the Hood</a></li>
@@ -1271,6 +1272,54 @@
         <p class="hero-subtitle">
           Complete architectural schematic, component-by-component engineering breakdown, and technical comparison against standard multi-billion parameter LLMs.
         </p>
+      </div>
+    </section>
+
+    <!-- 0. BACKSTORY -->
+    <section id="backstory">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">How It Started</div>
+          <h2 class="section-title">Backstory: From a Cloud Microphone to TinyLM</h2>
+          <p class="section-desc">The project did not start as a language model. It started as the opposite &mdash; streaming audio to the cloud &mdash; until the requirements flipped the design.</p>
+        </div>
+
+        <div class="comp-breakdown-grid">
+          <div class="breakdown-card">
+            <h4>&#127908; 1. Streaming Audio to the Cloud</h4>
+            <p>
+              The first experiments with pocket-sized ESP32-S3 boards streamed the microphone to a server, ran speech-to-text, a cloud LLM and text-to-speech there, and streamed the audio back. The pipeline worked &mdash; but without Wi-Fi, a gateway and someone else's API, the gadget was a paperweight, and every word spoken to it left the house.
+            </p>
+          </div>
+
+          <div class="breakdown-card">
+            <h4>&#128225; 2. The Requirements Flipped the Design</h4>
+            <p>
+              The real goal was a bedtime device for a 6&ndash;8 year old: the child picks a character and a mode, and the device writes and narrates a 200&ndash;250 word story that always ends with everyone asleep. No cloud service, no LAN server, no runtime Internet after flashing. With the network gone, neural TTS is out too &mdash; narration is pre-recorded clips, so every word the device can ever say must be known in advance.
+            </p>
+          </div>
+
+          <div class="breakdown-card">
+            <h4>&#128214; 3. A Story Engine Came Before the Model</h4>
+            <p>
+              The first build was a deterministic C++ story engine: five character worlds, a fixed &ldquo;sleep spine&rdquo; plot skeleton, sixteen beat tables and a validator. It solved narration and safety &mdash; but it is dice: beats are picked from pools, and every story is assembled, never written.
+            </p>
+          </div>
+
+          <div class="breakdown-card">
+            <h4>&#127891; 4. The Engine Became the Teacher</h4>
+            <p>
+              The same tables generate the training corpus and the entire vocabulary: 752 ids = 30 control tokens + 722 words, closed by construction, so the model can never emit a word without a narration clip. A ~50K-parameter beat selector was on the table too, but a word-level generator is the whole point &mdash; so a 1.67M-parameter decoder-only Transformer was trained from scratch: a few thousand steps on a laptop CPU, then the expanded 57,600-story corpus on a rented T4 GPU. Evaluated by the firmware validator, never perplexity.
+            </p>
+          </div>
+
+          <div class="breakdown-card">
+            <h4>&#129504; 5. That Model Is TinyLM</h4>
+            <p>
+              Somewhere along the way the interesting artifact stopped being the appliance and became the model: a complete language model &mdash; tokenizer, training loop, checkpoints, a KV cache proven token-identical to full recompute (4.3&times; faster), a forward-pass tracer and this 30-step walkthrough &mdash; that fits in 867 KiB of INT4 flash.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
 
