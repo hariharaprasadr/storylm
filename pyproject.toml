@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinylm"
+version = "0.1.0"
+description = "TinyLM: 1.67M parameter Nano Language Model with KV-Cache for embedded edge devices"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+tinylm = "cli:main"

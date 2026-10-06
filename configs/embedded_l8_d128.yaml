@@ -1,0 +1,36 @@
+# Production target from docs/tiny_model.md.
+# 1.67M params, 867 KiB INT4, 768 KiB KV INT8, fits in PSRAM with room to spare.
+model:
+  vocab: 752        # data/vocab.json count (30 control + 722 words)
+  ctx: 384          # measured worst sequence is 299 tokens
+  layers: 8
+  d_model: 128
+  heads: 8          # head_dim 16
+  ffn: 512
+  tied_embeddings: true
+  rope: true
+
+quantization:
+  weights: int4_groupwise
+  group_size: 64
+  scales: fp16
+  kv_cache: int8
+
+training:
+  corpus: data/processed/train.jsonl
+  packed: data/processed/train.npz
+  batch: 16
+  lr: 3.0e-4
+  weight_decay: 0.1
+  warmup_steps: 100
+  steps: 6000
+  objective: causal next-token prediction, loss masked to story tokens
+  eval: firmware validator via `storygen --check`, not perplexity
+
+runtime:
+  weights_in_psram: true   # 867 KiB; flash-mapped is 4x slower
+  stop_token: <END>
+  sampling:
+    temperature: 0.8
+    top_k: 40
+    repetition_penalty: 4-gram

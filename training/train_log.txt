@@ -1,0 +1,44 @@
+vocab 752 | total params 1,671,296 | INT4 867 KiB | KV INT8 768 KiB | ctx 384
+step   250  train 2.970  val 2.949  lr 2.99e-04   43.1s
+step   500  train 0.821  val 0.810  lr 2.92e-04   86.1s
+step   750  train 0.462  val 0.479  lr 2.80e-04  129.2s
+step  1000  train 0.409  val 0.419  lr 2.62e-04  172.5s
+step  1250  train 0.370  val 0.372  lr 2.40e-04  215.6s
+step  1500  train 0.349  val 0.337  lr 2.14e-04  258.7s
+step  1750  train 0.311  val 0.324  lr 1.86e-04  301.1s
+step  2000  train 0.293  val 0.314  lr 1.56e-04  340.9s
+step  2250  train 0.291  val 0.306  lr 1.26e-04  380.3s
+step  2500  train 0.278  val 0.301  lr 9.67e-05  420.1s
+step  2750  train 0.275  val 0.299  lr 6.97e-05  460.3s
+step  3000  train 0.266  val 0.295  lr 4.60e-05  500.5s
+step  3250  train 0.268  val 0.293  lr 2.65e-05  540.3s
+step  3500  train 0.255  val 0.292  lr 1.20e-05  579.8s
+step  3750  train 0.265  val 0.291  lr 3.01e-06  619.5s
+step  4000  train 0.260  val 0.290  lr 1.25e-09  659.0s
+saved artifacts/checkpoints/embedded.pt
+--- sample ---
+the moon was up when bluey found a bedtime storybook near the bedroom window.
+bluey tucked the teddy under one arm and got comfortable.
+bluey folded the covers just so and made everything nice and neat.
+bluey wrapped up snugly and grinned at how soft the bedtime storybook was.
+bluey drank some water then lay down for the night.
+the sky had that deep velvety look it gets at night.
+everything outdoors had gone soft and grey and sleepy.
+bingo needed someone to sit with them.
+bluey could tell that bingo needed some company.
+bluey promised to check on them later.
+together they counted down from ten very slowly.
+bluey fetched the bedtime storybook and brought it over to bingo.
+bluey sat with bingo until the wriggling stopped.
+bluey showed bingo how to snuggle down into the warm spot.
+they whispered about lovely things until it felt calmer.
+bingo was safe and snug and warm at last.
+both of them felt calm and very glad.
+the worrying feeling drifted off somewhere else.
+the air smelled faintly of soap and warm blankets.
+the house settled into its quiet sleepy self.
+and there they stayed asleep and warm until morning.
+bluey was fast asleep before the quilt was even settled.
+bluey and bingo slept on cosy and warm and ready for tomorrow.
+validator: ok (exit 0)
+EXIT=0

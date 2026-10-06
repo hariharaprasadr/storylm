@@ -1,0 +1,3 @@
+# Verified with Python 3.14 on macOS arm64.
+torch==2.14.1
+numpy==2.5.3
