@@ -3,1488 +3,1463 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TinyLM Architecture & Comparison: 1.67M Model vs. Regular LLM</title>
-  <meta name="description" content="Detailed architectural diagram, component breakdown, and deep comparison of the 1.67M parameter TinyLM versus standard LLMs.">
+  <title>TinyLM — a whole language model in 867 KiB</title>
+  <meta name="description" content="A 1.67M-parameter language model that writes bedtime stories, running entirely on an embedded microcontroller. Full architecture, live in-browser generation, and a step-by-step forward pass walkthrough.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090d16;
-      --bg-surface: #0f172a;
-      --bg-card: rgba(17, 24, 39, 0.75);
-      --bg-card-hover: rgba(30, 41, 59, 0.85);
-      --border: rgba(255, 255, 255, 0.08);
-      --border-accent: rgba(99, 102, 241, 0.35);
-      --primary: #6366f1;
-      --primary-light: #818cf8;
-      --primary-glow: rgba(99, 102, 241, 0.35);
-      --cyan: #06b6d4;
-      --cyan-glow: rgba(6, 182, 212, 0.25);
-      --emerald: #10b981;
-      --emerald-glow: rgba(16, 185, 129, 0.25);
-      --amber: #f59e0b;
-      --rose: #f43f5e;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
-      --radius-full: 9999px;
+      --paper: #f7f3ea;
+      --paper-2: #efe9da;
+      --card: #fdfbf6;
+      --ink: #241d12;
+      --muted: #6a5f4d;
+      --faint: #9c9078;
+      --line: #ddd3bc;
+      --line-soft: #e9e1cc;
+      --accent: #b8501f;
+      --accent-ink: #8f3d14;
+      --accent-soft: rgba(184, 80, 31, 0.08);
+      --blue: #31598f;
+      --neg: rgba(49, 89, 143, 0.10);
+      --radius: 14px;
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-body: 'Newsreader', Georgia, serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+      --max: 1080px;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
 
     body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: var(--font-main);
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 1.06rem;
       line-height: 1.6;
-      min-height: 100vh;
-      overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 15% 10%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
-        radial-gradient(circle at 85% 25%, rgba(6, 182, 212, 0.10) 0%, transparent 45%),
-        radial-gradient(circle at 50% 70%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+    ::selection { background: var(--accent-soft); }
 
-    /* Header */
-    header {
-      border-bottom: 1px solid var(--border);
-      backdrop-filter: blur(16px);
+    .container { max-width: var(--max); margin: 0 auto; padding: 0 28px; }
+
+    /* ============ NAV ============ */
+    header.site-nav {
       position: sticky;
       top: 0;
-      z-index: 100;
-      background: rgba(9, 13, 22, 0.9);
+      z-index: 50;
+      background: rgba(247, 243, 234, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line-soft);
     }
+
     .nav-inner {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      height: 70px;
+      justify-content: space-between;
+      height: 58px;
+      gap: 16px;
     }
-    .brand {
+
+    .wordmark {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.3rem;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .wordmark em { color: var(--accent); font-style: normal; }
+
+    .nav-links {
+      display: flex;
+      gap: 4px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .nav-links::-webkit-scrollbar { display: none; }
+
+    .nav-links a {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .nav-links a:hover { color: var(--accent-ink); background: var(--accent-soft); }
+
+    /* ============ SECTION SCAFFOLD ============ */
+    main > section {
+      padding: 84px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    main > section:first-of-type { border-bottom: none; }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--accent-ink);
       display: flex;
       align-items: center;
       gap: 12px;
-      font-weight: 800;
-      font-size: 1.25rem;
-      letter-spacing: -0.02em;
-    }
-    .brand-badge {
-      background: linear-gradient(135deg, var(--primary), var(--cyan));
-      padding: 4px 10px;
-      border-radius: var(--radius-sm);
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .nav-links {
-      display: flex;
-      gap: 28px;
-      list-style: none;
-    }
-    .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.9rem;
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-    .nav-links a:hover {
-      color: var(--text);
     }
 
-    /* Hero */
-    .hero {
-      padding: 70px 0 50px;
-      text-align: center;
+    .section-eyebrow::after {
+      content: "";
+      flex: 0 0 48px;
+      height: 1px;
+      background: var(--accent);
+      opacity: 0.5;
     }
-    .hero-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 16px;
-      background: rgba(99, 102, 241, 0.12);
-      border: 1px solid var(--border-accent);
-      border-radius: var(--radius-full);
-      font-size: 0.825rem;
+
+    .section-title {
+      font-family: var(--font-display);
       font-weight: 600;
-      color: #a5b4fc;
-      margin-bottom: 20px;
-    }
-    .pulse-dot {
-      width: 8px;
-      height: 8px;
-      background: var(--emerald);
-      border-radius: 50%;
-      box-shadow: 0 0 10px var(--emerald);
-    }
-    h1 {
-      font-size: clamp(2.4rem, 4.5vw, 3.8rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1.15;
-      margin-bottom: 18px;
-      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 75%, #94a3b8 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .hero-subtitle {
-      max-width: 780px;
-      margin: 0 auto;
-      font-size: 1.1rem;
-      color: var(--text-muted);
+      font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+      letter-spacing: -0.02em;
+      line-height: 1.12;
+      margin: 14px 0 12px;
+      max-width: 22ch;
     }
 
-    /* Section Styling */
-    section {
-      padding: 60px 0;
+    .section-desc {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 62ch;
+      margin: 0;
     }
-    .section-header {
-      text-align: center;
-      max-width: 720px;
-      margin: 0 auto 45px;
+
+    .section-head { margin-bottom: 44px; }
+
+    /* ============ HERO ============ */
+    .hero {
+      padding: 72px 0 64px;
+      border-bottom: 1px solid var(--line-soft);
     }
-    .section-tag {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--primary-light);
+
+    .hero-kicker {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--accent-ink);
+      margin-bottom: 22px;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-weight: 300;
+      font-size: clamp(2.9rem, 6.4vw, 5rem);
+      letter-spacing: -0.03em;
+      line-height: 1.02;
+      margin: 0 0 24px;
+      max-width: 16ch;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 1.22rem;
+      color: var(--muted);
+      max-width: 58ch;
+      margin: 0 0 40px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      overflow: hidden;
+    }
+
+    .stat {
+      padding: 20px 22px;
+      border-right: 1px solid var(--line-soft);
+    }
+
+    .stat:last-child { border-right: none; }
+
+    .stat-num {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.9rem;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      display: block;
+    }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      margin-bottom: 8px;
-    }
-    .section-title {
-      font-size: 2.1rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
-    }
-    .section-desc {
-      color: var(--text-muted);
-      font-size: 0.98rem;
+      color: var(--muted);
+      display: block;
+      margin-top: 8px;
     }
 
-    /* ARCHITECTURE DIAGRAM SECTION */
-    .diagram-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border-accent);
-      border-radius: var(--radius-lg);
-      padding: 40px 30px;
-      backdrop-filter: blur(16px);
-      box-shadow: 0 0 40px rgba(99, 102, 241, 0.1);
+    /* ============ STORY STUDIO ============ */
+    .studio {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: clamp(22px, 4vw, 40px);
     }
 
-    .diagram-flow {
+    .studio-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--faint);
+      margin: 0 0 8px;
+    }
+
+    .studio-chips {
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      position: relative;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+
+    .studio-chip {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .studio-chip:hover { border-color: var(--accent); color: var(--accent-ink); }
+
+    .studio-chip.is-on {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff8f0;
+    }
+
+    .studio-go {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.05rem;
+      letter-spacing: 0.01em;
+      padding: 13px 28px;
+      border-radius: 12px;
+      border: none;
+      background: var(--accent);
+      color: #fff8f0;
+      cursor: pointer;
+    }
+
+    .studio-go:hover:not(:disabled) { background: var(--accent-ink); }
+    .studio-go:disabled { opacity: 0.55; cursor: wait; }
+
+    .studio-out {
+      margin-top: 28px;
+      border-top: 1px solid var(--line-soft);
+      padding-top: 24px;
+      min-height: 48px;
+    }
+
+    .studio-out:empty::before {
+      content: "The story types itself here — every token computed live from the real checkpoint weights.";
+      color: var(--faint);
+      font-style: italic;
+    }
+
+    .studio-byline {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-ink);
+      margin-bottom: 18px;
+    }
+
+    .studio-line {
+      font-size: 1.24rem;
+      line-height: 1.55;
+      margin: 0 0 10px;
+      max-width: 46ch;
+    }
+
+    .studio-line.is-new { animation: lineIn 0.4s ease both; }
+
+    @keyframes lineIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .studio-stats {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--faint);
+      margin-top: 20px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .studio-line.is-new { animation: none; }
+      html { scroll-behavior: auto; }
+    }
+
+    /* ============ BACKSTORY / EDITOR CARDS ============ */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+    }
+
+    .ed-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .ed-card-num {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      color: var(--accent-ink);
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .ed-card h3, .ed-card h4 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.18rem;
+      letter-spacing: -0.01em;
+      margin: 0 0 10px;
+    }
+
+    .ed-card p {
+      font-size: 0.95rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* ============ ARCHITECTURE DIAGRAM ============ */
+    .diagram {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: clamp(20px, 4vw, 42px);
     }
 
     .diagram-node {
-      width: 100%;
-      max-width: 680px;
-      border-radius: var(--radius-md);
-      padding: 16px 22px;
-      border: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.85);
-      position: relative;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: 12px;
+      background: var(--paper);
+      padding: 16px 20px;
       display: flex;
+      flex-wrap: wrap;
+      gap: 8px 24px;
       justify-content: space-between;
-      align-items: center;
-      transition: all 0.2s;
-    }
-    .diagram-node:hover {
-      border-color: var(--primary);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      align-items: baseline;
     }
 
-    .node-info {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .node-tag {
-      font-size: 0.72rem;
+    .diagram-node .node-kicker {
       font-family: var(--font-mono);
-      font-weight: 700;
-      color: var(--primary-light);
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.12em;
+      color: var(--faint);
+      display: block;
     }
-    .node-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #fff;
+
+    .diagram-node .node-title {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.12rem;
     }
-    .node-desc {
-      font-size: 0.82rem;
-      color: var(--text-muted);
+
+    .diagram-node .node-desc {
+      font-size: 0.88rem;
+      color: var(--muted);
+      display: block;
+      margin-top: 4px;
     }
-    .node-shape {
+
+    .diagram-node .node-shape {
       font-family: var(--font-mono);
-      font-size: 0.8rem;
-      background: rgba(99, 102, 241, 0.15);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.3);
-      padding: 5px 12px;
-      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      color: var(--accent-ink);
+      background: var(--accent-soft);
+      border-radius: 8px;
+      padding: 4px 10px;
       white-space: nowrap;
     }
 
     .flow-arrow {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      color: var(--text-dim);
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      gap: 2px;
-    }
-    .flow-arrow::before {
-      content: "";
-      width: 2px;
-      height: 18px;
-      background: linear-gradient(180deg, var(--border), var(--primary));
-    }
-    .flow-arrow::after {
-      content: "▼";
-      font-size: 0.7rem;
-      color: var(--primary-light);
-    }
-
-    /* Repeating Layer Box */
-    .transformer-layer-box {
-      width: 100%;
-      max-width: 820px;
-      border: 2px dashed rgba(99, 102, 241, 0.4);
-      border-radius: var(--radius-lg);
-      padding: 28px 24px;
-      background: rgba(15, 23, 42, 0.5);
-      position: relative;
-    }
-    .layer-badge-repeat {
-      position: absolute;
-      top: -14px;
-      left: 30px;
-      background: linear-gradient(135deg, var(--primary), #4338ca);
-      color: #fff;
-      font-size: 0.8rem;
-      font-weight: 800;
-      padding: 4px 16px;
-      border-radius: var(--radius-full);
-      letter-spacing: 0.05em;
-      box-shadow: 0 4px 12px var(--primary-glow);
-    }
-
-    .sub-branch-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-top: 10px;
-    }
-    @media (max-width: 768px) {
-      .sub-branch-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .sub-branch {
-      background: rgba(2, 6, 23, 0.7);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .branch-header {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--cyan);
-      display: flex;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 8px;
-    }
-    .micro-block {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.85rem;
-    }
-    .micro-block .mb-name {
-      font-weight: 600;
-      color: var(--text);
-    }
-    .micro-block .mb-dim {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: #38bdf8;
-    }
-
-    /* COMPONENT EXPLANATIONS GRID */
-    .components-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      gap: 24px;
-    }
-    .comp-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 28px;
-      backdrop-filter: blur(14px);
-      transition: all 0.2s;
-    }
-    .comp-card:hover {
-      border-color: var(--border-accent);
-      transform: translateY(-3px);
-    }
-    .comp-card-badge {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--cyan);
-      background: rgba(6, 182, 212, 0.12);
-      border: 1px solid rgba(6, 182, 212, 0.25);
-      padding: 3px 10px;
-      border-radius: var(--radius-sm);
-      margin-bottom: 12px;
-    }
-    .comp-card h3 {
-      font-size: 1.25rem;
-      font-weight: 800;
-      margin-bottom: 10px;
-      color: #fff;
-    }
-    .comp-card p {
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      line-height: 1.6;
-      margin-bottom: 14px;
-    }
-    .comp-specs {
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: #cbd5e1;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .comp-specs span {
-      color: var(--primary-light);
-    }
-
-    /* COMPARISON SECTION */
-    .comparison-section {
-      background: rgba(15, 23, 42, 0.4);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .table-wrapper {
-      background: var(--bg-card);
-      border: 1px solid var(--border-accent);
-      border-radius: var(--radius-lg);
-      overflow-x: auto;
-      backdrop-filter: blur(16px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.92rem;
-    }
-    th, td {
-      padding: 18px 24px;
-      border-bottom: 1px solid var(--border);
-    }
-    th {
-      background: rgba(15, 23, 42, 0.95);
-      color: var(--text-muted);
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 0.78rem;
-      letter-spacing: 0.05em;
-    }
-    tr:last-child td {
-      border-bottom: none;
-    }
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
-    .cell-dim {
-      font-weight: 700;
-      color: #fff;
-    }
-    .cell-tiny {
-      color: #a5b4fc;
-      font-weight: 600;
-      background: rgba(99, 102, 241, 0.04);
-    }
-    .cell-normal {
-      color: #cbd5e1;
-    }
-    .pill-tiny {
-      display: inline-block;
-      background: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.4);
-      padding: 2px 8px;
-      border-radius: var(--radius-full);
-      font-size: 0.75rem;
-      font-weight: 700;
-      font-family: var(--font-mono);
-      margin-left: 6px;
-    }
-
-    /* Comparison Cards Grid */
-    .comp-breakdown-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      margin-top: 40px;
-    }
-    .breakdown-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 24px;
-    }
-    .breakdown-card h4 {
-      font-size: 1.05rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .breakdown-card p {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      line-height: 1.55;
-    }
-
-    /* ==========================================================================
-       WALKTHROUGH: UNDER THE HOOD SECTION
-       ========================================================================== */
-    .wt-card {
-      background: #090e1a;
-      border: 1px solid var(--border-accent);
-      border-radius: var(--radius-lg);
-      padding: 32px 28px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-      overflow: hidden;
-    }
-
-    /* Chapter Rail */
-    .wt-rail-wrapper {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      overflow-x: auto;
-      padding-bottom: 6px;
-    }
-    .wt-rail-label {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-dim);
-      white-space: nowrap;
-    }
-    .wt-rail {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .wt-rail-btn {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      padding: 6px 14px;
-      border-radius: var(--radius-full);
-      font-size: 0.78rem;
-      font-weight: 600;
-      font-family: var(--font-mono);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .wt-rail-btn:hover {
-      color: #fff;
-      border-color: var(--primary-light);
-    }
-    .wt-rail-btn.is-on {
-      background: var(--primary);
-      border-color: var(--primary-light);
-      color: #fff;
-      box-shadow: 0 0 14px var(--primary-glow);
-    }
-
-    /* Playback & Controls Bar */
-    .wt-controls-bar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 12px 18px;
-      margin-bottom: 28px;
-    }
-    .wt-btn-group {
-      display: flex;
-      gap: 8px;
-    }
-    .wt-ctrl-btn {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid var(--border);
-      color: #fff;
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      font-size: 0.82rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
-    }
-    .wt-ctrl-btn:hover:not(:disabled) {
-      background: rgba(51, 65, 85, 0.9);
-      border-color: var(--primary-light);
-    }
-    .wt-ctrl-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-    .wt-play-btn {
-      background: linear-gradient(135deg, var(--primary), #4338ca);
-      border-color: rgba(99, 102, 241, 0.5);
-    }
-    .wt-speed-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-    .wt-speed-wrap select {
-      background: rgba(2, 6, 23, 0.8);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 5px 10px;
-      border-radius: var(--radius-sm);
-      font-size: 0.78rem;
-      font-family: var(--font-mono);
-      outline: none;
-    }
-    .wt-progress-wrap {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 180px;
-    }
-    .wt-count-text {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--primary-light);
-      white-space: nowrap;
-    }
-    .wt-progress-track {
-      flex: 1;
-      height: 8px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: var(--radius-full);
-      overflow: hidden;
-    }
-    .wt-progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--primary), var(--cyan));
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    /* Layout Grid */
-    .wt-layout-grid {
-      display: grid;
-      grid-template-columns: minmax(290px, 340px) minmax(0, 1fr);
-      gap: 24px;
-      align-items: start;
-      max-width: 100%;
-    }
-    @media (max-width: 960px) {
-      .wt-layout-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-
-    /* Left Sidebar: Residual Stream Map */
-    .wt-sidebar-map {
-      background: #0b1120;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 16px 12px;
-      box-sizing: border-box;
-      min-width: 0;
-      max-width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
-      position: relative;
-      z-index: 1;
-    }
-    .wt-map-heading {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .wt-map-heading span:first-child {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #fff;
-    }
-    .wt-map-sub {
-      font-size: 0.72rem;
-      font-family: var(--font-mono);
-      color: var(--primary-light);
-    }
-    .wt-map {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      width: 100%;
-      min-width: 0;
-      max-width: 100%;
-      box-sizing: border-box;
-    }
-    .wt-map-row {
-      display: grid;
-      grid-template-columns: 58px repeat(6, minmax(0, 1fr));
-      align-items: center;
-      gap: 3px;
-      padding: 4px 4px;
-      border-radius: 6px;
-      transition: background 0.2s;
-      width: 100%;
-      min-width: 0;
-      max-width: 100%;
-      box-sizing: border-box;
-    }
-    .wt-map-head {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      padding-bottom: 6px;
-    }
-    .wt-map-label {
-      font-size: 0.62rem;
-      font-family: var(--font-mono);
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
-    }
-    .wt-map-tok {
-      font-size: 0.58rem;
-      font-family: var(--font-mono);
-      text-align: center;
-      color: var(--text-dim);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-      padding: 0 1px;
-    }
-    .wt-map-tok.is-last {
-      color: var(--amber);
-      font-weight: 700;
-    }
-    .wt-map-row.is-active {
-      background: rgba(99, 102, 241, 0.22);
-      border-left: 3px solid var(--primary-light);
-    }
-    .wt-map-row.is-active .wt-map-label {
-      color: #fff;
-      font-weight: 700;
-    }
-    .wt-map-row.is-done {
-      opacity: 0.75;
-    }
-    .wt-map-row canvas,
-    .wt-map-row .wt-matrix {
-      width: 100% !important;
-      height: 14px !important;
-      min-width: 0 !important;
-      max-width: 100% !important;
-      border-radius: 2px;
-      image-rendering: pixelated;
-      display: block;
-      box-sizing: border-box;
-    }
-    .wt-matrix {
-      border-radius: 3px;
-      image-rendering: pixelated;
-      max-width: 100%;
-      display: block;
-    }
-    .wt-matrix.is-last {
-      box-shadow: 0 0 6px rgba(251, 146, 60, 0.6);
-      border: 1px solid rgba(251, 146, 60, 0.8);
-    }
-    .wt-map-note {
-      margin-top: 14px;
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      line-height: 1.45;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .wt-map-note code {
-      color: var(--amber);
-      font-family: var(--font-mono);
-    }
-
-    /* Right Main Panel (Opaque surface with high contrast) */
-    .wt-main-panel {
-      background-color: #0d1527 !important;
-      background: #0d1527 !important;
-      opacity: 1 !important;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: var(--radius-md);
-      padding: 26px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      min-width: 0;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-      position: relative;
-      z-index: 2;
-    }
-    .wt-main-panel.is-enter {
-      animation: wtSlideUp 0.25s ease;
-    }
-    @keyframes wtSlideUp {
-      from { transform: translateY(4px); }
-      to { transform: translateY(0); }
-    }
-    .wt-header-block {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .wt-kicker-tag {
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--cyan);
-    }
-    .wt-step-title {
-      font-size: 1.45rem;
-      font-weight: 800;
-      color: #fff;
-      letter-spacing: -0.01em;
-      line-height: 1.25;
-    }
-    .wt-plain-text {
-      font-size: 0.95rem;
-      color: #cbd5e1;
-      line-height: 1.6;
-    }
-    .wt-numbers-box {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 8px 12px;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-
-    /* Visual Workspace & Internal Dynamic Elements */
-    .wt-visual-workspace {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      min-height: 240px;
-    }
-    .wt-strip-row {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      align-items: center;
-      gap: 12px;
-    }
-    @media (max-width: 600px) {
-      .wt-strip-row { grid-template-columns: 100px 1fr; }
-    }
-    .wt-strip-label {
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--primary-light);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .wt-strip-note {
-      grid-column: 2 / -1;
-      font-size: 0.7rem;
-      color: var(--text-dim);
-    }
-
-    /* Bars component */
-    .wt-bars {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .wt-bar-row {
-      display: grid;
-      grid-template-columns: 110px 1fr 140px;
-      align-items: center;
-      gap: 10px;
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-    }
-    @media (max-width: 600px) {
-      .wt-bar-row { grid-template-columns: 80px 1fr 90px; font-size: 0.72rem; }
-    }
-    .wt-bar-label {
-      color: #e2e8f0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .wt-bar-row.is-hot .wt-bar-label {
-      color: var(--amber);
-      font-weight: 700;
-    }
-    .wt-bar-track {
-      background: rgba(255, 255, 255, 0.08);
-      height: 12px;
-      border-radius: var(--radius-full);
-      overflow: hidden;
-      display: block;
-    }
-    .wt-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #38bdf8, #818cf8);
-      display: block;
-      border-radius: var(--radius-full);
-      transition: width 0.3s;
-    }
-    .wt-bar-row.is-hot .wt-bar-fill {
-      background: linear-gradient(90deg, #f59e0b, #fb923c);
-    }
-    .wt-bar-val {
-      color: var(--text-muted);
-      font-size: 0.72rem;
-      text-align: right;
-    }
-
-    /* Legend */
-    .wt-legend {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      font-family: var(--font-mono);
-    }
-    .wt-legend .sw {
-      width: 12px;
-      height: 12px;
-      border-radius: 2px;
-      display: inline-block;
-      margin-right: 4px;
-      vertical-align: middle;
-    }
-    .wt-legend .sw.neg { background: rgb(56, 189, 248); }
-    .wt-legend .sw.zero { background: rgb(15, 23, 42); border: 1px solid rgba(255,255,255,0.2); }
-    .wt-legend .sw.pos { background: rgb(251, 146, 60); }
-
-    /* Histogram Canvas */
-    .wt-hist {
-      width: 100%;
-      height: auto;
-      max-height: 140px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 4px;
-    }
-
-    /* Weight Inspection components */
-    .wt-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .wt-pill {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      padding: 5px 12px;
-      border-radius: var(--radius-sm);
-      font-size: 0.74rem;
-      font-family: var(--font-mono);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .wt-pill:hover {
-      color: #fff;
-      border-color: var(--primary-light);
-    }
-    .wt-pill.is-on {
-      background: rgba(99, 102, 241, 0.25);
-      border-color: var(--primary);
-      color: #a5b4fc;
-      font-weight: 700;
-    }
-    .wt-weight-body {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      background: rgba(0, 0, 0, 0.25);
-      border-radius: var(--radius-sm);
-      padding: 14px;
-    }
-    .wt-small {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      line-height: 1.45;
-    }
-    .wt-mono {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: #94a3b8;
-    }
-    .wt-figure {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .wt-fig-cap {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--cyan);
-      font-family: var(--font-mono);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .wt-groups {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    .wt-group {
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 8px 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.78rem;
-    }
-    .wt-group strong {
-      font-family: var(--font-mono);
-      color: var(--primary-light);
-    }
-
-    /* Prompt tokens display */
-    .wt-prompt {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    .wt-token {
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 110px;
-    }
-    .wt-token.is-last {
-      border-color: var(--amber);
-      background: rgba(245, 158, 11, 0.08);
-    }
-    .wt-token-text {
-      font-family: var(--font-mono);
-      font-weight: 700;
-      font-size: 0.85rem;
-      color: #fff;
-    }
-    .wt-token.is-last .wt-token-text {
-      color: var(--amber);
-    }
-    .wt-token-id {
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      color: var(--cyan);
-    }
-    .wt-token-mean {
-      font-size: 0.72rem;
-      color: var(--text-dim);
-    }
-    .wt-question {
-      background: rgba(99, 102, 241, 0.1);
-      border: 1px solid rgba(99, 102, 241, 0.3);
-      border-radius: var(--radius-sm);
-      padding: 12px 16px;
-      font-family: var(--font-mono);
-      font-size: 0.9rem;
-      color: #e2e8f0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .wt-qmark {
-      color: var(--amber);
-      font-weight: 800;
-      font-size: 1.1rem;
-    }
-
-    /* Attention Grid */
-    .wt-attn-detail {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .wt-attn-grid {
-      display: grid;
-      gap: 2px;
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 10px;
-      border-radius: 4px;
-      overflow-x: auto;
-    }
-    .wt-attn-h {
-      color: var(--text-dim);
-      text-align: center;
-      padding: 2px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .wt-attn-r {
-      text-align: right;
-      padding-right: 6px;
-      color: var(--text-muted);
-    }
-    .wt-attn-cell {
-      height: 24px;
+      height: 34px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #fff;
-      font-weight: 600;
-      border-radius: 2px;
-    }
-    .wt-attn-cell.is-masked {
-      background: rgba(255, 255, 255, 0.02);
-      color: transparent;
+      gap: 10px;
+      color: var(--faint);
     }
 
-    /* Logit Lens Trail */
-    .wt-trail {
+    .flow-arrow::before {
+      content: "";
+      width: 1px;
+      height: 100%;
+      background: var(--line);
+      order: 1;
+    }
+
+    .flow-arrow span {
+      order: 2;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      background: var(--paper);
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      padding: 2px 10px;
+    }
+
+    .layer-frame {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--paper-2);
+      padding: 20px;
+    }
+
+    .layer-frame-tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--ink);
+      margin-bottom: 16px;
       display: flex;
+      justify-content: space-between;
       flex-wrap: wrap;
       gap: 6px;
     }
-    .wt-trail-chip {
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-    .wt-trail-chip.is-on {
-      border-color: var(--cyan);
-      color: #fff;
-      background: rgba(6, 182, 212, 0.15);
-      font-weight: 700;
+
+    .sub-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
     }
 
-    /* Sampling comparison columns */
-    .wt-sample-cols {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 14px;
+    .sub-branch {
+      background: var(--card);
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: 14px 16px;
     }
-    .wt-sample-col {
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 12px;
+
+    .branch-head {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      letter-spacing: 0.05em;
+      color: var(--accent-ink);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .micro-block {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 10px;
+      border-bottom: 1px dashed var(--line-soft);
+      font-size: 0.86rem;
+    }
+
+    .micro-block:last-child { border-bottom: none; }
+
+    .micro-block .mb-dim {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .micro-block.is-accent { background: var(--accent-soft); border-radius: 8px; border-bottom-color: transparent; }
+    .micro-block.is-blue { background: var(--neg); border-radius: 8px; border-bottom-color: transparent; }
+
+    /* ============ COMPONENTS ============ */
+    .components-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 18px;
+    }
+
+    .comp-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
     }
-    .wt-picked {
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      border-radius: var(--radius-sm);
-      padding: 12px 16px;
+
+    .comp-card-badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-ink);
+    }
+
+    .comp-card h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.2rem;
+      margin: 10px 0 10px;
+    }
+
+    .comp-card p {
+      font-size: 0.95rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin: 0 0 14px;
+      flex: 1;
+    }
+
+    .comp-card code {
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      background: var(--paper-2);
+      border-radius: 5px;
+      padding: 1px 5px;
+    }
+
+    .comp-specs {
+      border-top: 1px solid var(--line-soft);
+      padding-top: 12px;
+    }
+
+    .comp-specs div {
+      font-size: 0.84rem;
+      color: var(--muted);
+      padding: 2px 0;
+    }
+
+    .comp-specs span {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--ink);
+    }
+
+    /* ============ WALKTHROUGH ============ */
+    .wt-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: clamp(16px, 3vw, 28px);
+    }
+
+    .wt-rail-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .wt-rail-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .wt-rail {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .wt-rail::-webkit-scrollbar { display: none; }
+
+    .wt-rail-btn {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .wt-rail-btn.is-on {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--paper);
+    }
+
+    .wt-controls-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 12px 0;
+      border-top: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line-soft);
+      margin-bottom: 20px;
+    }
+
+    .wt-btn-group { display: flex; gap: 8px; }
+
+    .wt-ctrl-btn {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .wt-play-btn {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff8f0;
+      min-width: 96px;
+    }
+
+    .wt-ctrl-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .wt-speed-wrap {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wt-speed-wrap select {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 8px;
+      color: var(--ink);
+    }
+
+    .wt-progress-wrap {
+      margin-left: auto;
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 0.9rem;
-      color: #fff;
-    }
-    .wt-picked strong {
-      font-family: var(--font-mono);
-      font-size: 1.1rem;
-      color: var(--emerald);
     }
 
-    /* Generation loop chips */
-    .wt-gen {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 14px;
-      min-height: 80px;
-    }
-    .wt-gen-prompt {
+    .wt-count-text {
       font-family: var(--font-mono);
       font-size: 0.78rem;
-      color: var(--text-dim);
-      background: rgba(255, 255, 255, 0.04);
-      padding: 4px 8px;
-      border-radius: 4px;
-    }
-    .wt-gen-tok {
-      background: rgba(99, 102, 241, 0.18);
-      border: 1px solid rgba(99, 102, 241, 0.4);
-      color: #fff;
-      font-family: var(--font-mono);
-      font-size: 0.82rem;
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .wt-gen-tok:hover, .wt-gen-tok.is-on {
-      border-color: var(--cyan);
-      background: rgba(6, 182, 212, 0.25);
-    }
-    .wt-gen-tok.is-choice {
-      border-color: var(--amber);
-      background: rgba(245, 158, 11, 0.2);
-    }
-    .wt-gen-tok.is-new {
-      animation: wtPopIn 0.3s ease;
-    }
-    @keyframes wtPopIn {
-      from { transform: scale(0.6); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    .wt-gen-info {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 12px;
+      color: var(--muted);
+      white-space: nowrap;
     }
 
-    footer {
-      padding: 40px 0;
-      text-align: center;
-      color: var(--text-dim);
-      font-size: 0.85rem;
+    .wt-progress-track {
+      width: 140px;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--paper-2);
+      overflow: hidden;
     }
+
+    .wt-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.25s ease;
+    }
+
+    .wt-layout-grid {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .wt-sidebar-map {
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: 14px;
+      position: sticky;
+      top: 78px;
+    }
+
+    .wt-map-heading {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 10px;
+    }
+
+    .wt-map-sub { color: var(--faint); font-size: 0.66rem; }
+
+    .wt-map-row {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 4px;
+      opacity: 0.35;
+    }
+
+    .wt-map-row.wt-map-head { opacity: 1; }
+
+    .wt-map-row.is-done { opacity: 0.7; }
+    .wt-map-row.is-active { opacity: 1; }
+
+    .wt-map-row.is-active .wt-map-label { color: var(--accent-ink); }
+
+    .wt-map-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      width: 58px;
+      flex: 0 0 58px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .wt-map-tok {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      color: var(--faint);
+      width: 30px;
+      flex: 0 0 30px;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .wt-map-tok.is-last { color: var(--accent-ink); font-weight: 600; }
+
+    .wt-map .wt-matrix {
+      width: 30px;
+      flex: 0 0 30px;
+      border-radius: 3px;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    .wt-map .wt-matrix.is-last { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .wt-map-note {
+      font-size: 0.78rem;
+      color: var(--faint);
+      margin-top: 10px;
+    }
+
+    .wt-map-note code {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--accent-ink);
+    }
+
+    .wt-main-panel {
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      padding: clamp(16px, 3vw, 28px);
+      min-height: 420px;
+    }
+
+    .wt-main-panel.is-enter .wt-step-title,
+    .wt-main-panel.is-enter .wt-plain-text,
+    .wt-main-panel.is-enter .wt-numbers-box {
+      animation: wtIn 0.35s ease both;
+    }
+
+    @keyframes wtIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .wt-kicker-tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-ink);
+      margin-bottom: 8px;
+    }
+
+    .wt-step-title {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.5rem;
+      letter-spacing: -0.01em;
+      margin: 0 0 10px;
+    }
+
+    .wt-plain-text {
+      font-size: 1rem;
+      color: var(--muted);
+      line-height: 1.65;
+      margin: 0 0 12px;
+    }
+
+    .wt-numbers-box {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--faint);
+      border-left: 2px solid var(--accent);
+      padding-left: 10px;
+      margin-bottom: 18px;
+    }
+
+    .wt-visual-workspace { display: block; }
+
+    .wt-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+    .wt-pill {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .wt-pill.is-on {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--paper);
+    }
+
+    .wt-figure { margin: 12px 0; }
+
+    .wt-fig-cap {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--faint);
+      margin-bottom: 8px;
+    }
+
+    .wt-small { font-size: 0.9rem; color: var(--muted); margin: 0 0 8px; }
+
+    .wt-mono {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .wt-matrix { border-radius: 6px; image-rendering: pixelated; display: block; width: 100%; }
+
+    .wt-hist { width: 100%; max-width: 520px; display: block; }
+
+    .wt-legend {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--faint);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 6px;
+    }
+
+    .wt-legend .sw {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      margin-left: 12px;
+    }
+
+    .wt-legend .sw:first-child { margin-left: 0; }
+    .wt-legend .sw.neg { background: var(--blue); }
+    .wt-legend .sw.zero { background: var(--paper-3, var(--line)); }
+    .wt-legend .sw.pos { background: var(--accent); }
+
+    .wt-strip-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+
+    .wt-strip-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      width: 110px;
+      flex: 0 0 110px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .wt-strip-row .wt-matrix { width: 100%; flex: 1; }
+
+    .wt-strip-note { font-family: var(--font-mono); font-size: 0.68rem; color: var(--faint); }
+
+    .wt-bars { max-width: 520px; }
+
+    .wt-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+    }
+
+    .wt-bar-label { width: 88px; flex: 0 0 88px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .wt-bar-track { flex: 1; height: 12px; background: var(--paper-2); border-radius: 4px; overflow: hidden; }
+
+    .wt-bar-fill { display: block; height: 100%; background: var(--paper-3, var(--line)); border-radius: 4px; }
+
+    .wt-bar-row.is-hot .wt-bar-fill { background: var(--accent); }
+    .wt-bar-row.is-hot .wt-bar-label { color: var(--accent-ink); font-weight: 600; }
+
+    .wt-bar-val { color: var(--muted); white-space: nowrap; }
+
+    .wt-groups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .wt-group {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--paper);
+    }
+
+    .wt-group strong {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      color: var(--ink);
+      margin-left: 6px;
+    }
+
+    .wt-prompt { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+
+    .wt-token {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .wt-token-text { font-family: var(--font-mono); font-weight: 500; font-size: 0.82rem; }
+    .wt-token-id { font-family: var(--font-mono); font-size: 0.66rem; color: var(--faint); }
+    .wt-token-mean { font-size: 0.72rem; color: var(--faint); }
+
+    .wt-token.is-last { border-color: var(--accent); background: var(--accent-soft); }
+    .wt-token.is-last .wt-token-text { color: var(--accent-ink); }
+
+    .wt-question {
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .wt-qmark { color: var(--accent); font-weight: 600; }
+
+    .wt-attn-detail { margin-top: 6px; }
+
+    .wt-attn-grid {
+      display: grid;
+      gap: 3px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      margin-top: 8px;
+      overflow-x: auto;
+    }
+
+    .wt-attn-h { color: var(--faint); align-self: center; }
+    .wt-attn-r { text-align: right; padding-right: 6px; }
+
+    .wt-attn-cell {
+      text-align: center;
+      padding: 6px 2px;
+      border-radius: 5px;
+      color: var(--ink);
+      min-width: 30px;
+    }
+
+    .wt-attn-cell.is-masked { background: transparent; color: var(--faint); }
+
+    .wt-sample-cols {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(160px, 1fr));
+      gap: 18px;
+    }
+
+    .wt-sample-col { min-width: 0; }
+
+    .wt-picked {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      margin-top: 16px;
+      color: var(--muted);
+    }
+
+    .wt-picked strong { color: var(--accent-ink); margin-left: 8px; }
+
+    .wt-gen { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+
+    .wt-gen-prompt {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--faint);
+      margin-right: 8px;
+      align-self: center;
+    }
+
+    .wt-gen-tok {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .wt-gen-tok.is-choice { border-color: var(--accent); color: var(--accent-ink); }
+    .wt-gen-tok.is-on { background: var(--accent); border-color: var(--accent); color: #fff8f0; }
+
+    .wt-gen-tok.is-new { animation: wtIn 0.5s ease both; }
+
+    .wt-gen-info { min-height: 40px; }
+
+    .wt-trail { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .wt-trail-chip {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .wt-trail-chip.is-on { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+
+    /* ============ COMPARISON ============ */
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      overflow-x: auto;
+    }
+
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    .table-wrap th {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      text-align: left;
+      padding: 16px 18px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .table-wrap th.pill-th { color: var(--accent-ink); }
+
+    .table-wrap td {
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line-soft);
+      font-size: 0.92rem;
+      vertical-align: top;
+    }
+
+    .table-wrap tr:last-child td { border-bottom: none; }
+
+    .cell-dim {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--muted);
+      width: 170px;
+    }
+
+    .cell-tiny {
+      background: var(--accent-soft);
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .cell-normal { color: var(--muted); }
+
+    .pill-note {
+      font-family: var(--font-mono);
+      font-size: 0.64rem;
+      background: var(--accent);
+      color: #fff8f0;
+      border-radius: 999px;
+      padding: 2px 9px;
+      margin-left: 8px;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    .pillar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 18px;
+      margin-top: 40px;
+    }
+
+    /* ============ FOOTER ============ */
+    footer {
+      padding: 56px 0 48px;
+      text-align: center;
+    }
+
+    .footer-line {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--faint);
+      margin: 0 0 8px;
+    }
+
+    .footer-title {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 1.3rem;
+      margin: 0 0 14px;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { color: var(--accent-ink); }
+
+    /* ============ RESPONSIVE ============ */
+    @media (max-width: 960px) {
+      .wt-layout-grid { grid-template-columns: 1fr; }
+      .wt-sidebar-map { position: static; }
+      main > section { padding: 64px 0; }
+    }
+
+    @media (max-width: 640px) {
+      .container { padding: 0 18px; }
+      main > section { padding: 56px 0; }
+      .hero { padding: 52px 0 44px; }
+      .sub-grid { grid-template-columns: 1fr; }
+      .wt-controls-bar { gap: 10px; }
+      .wt-progress-wrap { margin-left: 0; }
+      .wt-progress-track { width: 90px; }
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+      .stat { border-bottom: 1px solid var(--line-soft); }
+      .stat:nth-child(2n) { border-right: none; }
+      .wt-sample-cols { grid-template-columns: 1fr; }
+      .studio-line { font-size: 1.12rem; }
+      .nav-inner { height: auto; padding: 10px 0; flex-wrap: wrap; }
+      .nav-links { flex-wrap: wrap; justify-content: center; }
+    }
+
+    /* Anchor jumps must clear the sticky header */
+    main > section, .hero { scroll-margin-top: 72px; }
   </style>
 </head>
 <body>
 
-  <!-- Navigation -->
-  <header>
+  <header class="site-nav">
     <div class="container nav-inner">
-      <div class="brand">
-        <span>TinyLM</span>
-        <span class="brand-badge">TinyLM 1.67M</span>
-      </div>
+      <a class="wordmark" href="#top">Tiny<em>LM</em></a>
       <ul class="nav-links">
-        <li><a href="#backstory">Backstory</a></li>
-        <li><a href="#architecture">Architecture Diagram</a></li>
-        <li><a href="#components">Component Details</a></li>
-        <li><a href="#walkthrough">Under the Hood</a></li>
-        <li><a href="#comparison">TinyLM vs Regular LLM</a></li>
+        <li><a href="#story">Story Studio</a></li>
+        <li><a href="#origin">Origin</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#components">Components</a></li>
+        <li><a href="#walkthrough">Walkthrough</a></li>
+        <li><a href="#comparison">Comparison</a></li>
       </ul>
     </div>
   </header>
 
-  <main>
-    <!-- Hero Title -->
+  <main id="top">
+
+    <!-- HERO -->
     <section class="hero">
       <div class="container">
-        <div class="hero-pill">
-          <span class="pulse-dot"></span>
-          <span>ESP32-S3 Microcontroller Bare-Metal AI</span>
-        </div>
-        <h1>The Tiny Language Model</h1>
-        <p class="hero-subtitle">
-          Complete architectural schematic, component-by-component engineering breakdown, and technical comparison against standard multi-billion parameter LLMs.
+        <div class="hero-kicker">A trained language model for embedded hardware · ESP32-S3</div>
+        <h1 class="hero-title">A whole language model, <em>small enough for a matchbox.</em></h1>
+        <p class="hero-sub">
+          TinyLM is a 1.67-million-parameter decoder-only Transformer that writes original bedtime stories —
+          on a microcontroller, with no network, no cloud, and no API. This page runs the real weights
+          in your browser and then takes you inside every stage of the forward pass.
         </p>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-num">1,671,296</span><span class="stat-label">Parameters</span></div>
+          <div class="stat"><span class="stat-num">752</span><span class="stat-label">Closed vocabulary</span></div>
+          <div class="stat"><span class="stat-num">867 KiB</span><span class="stat-label">INT4 weights</span></div>
+          <div class="stat"><span class="stat-num">384</span><span class="stat-label">Token context</span></div>
+          <div class="stat"><span class="stat-num">0.5&ndash;1.5 W</span><span class="stat-label">Power budget</span></div>
+        </div>
       </div>
     </section>
 
-    <!-- 0. BACKSTORY -->
-    <section id="backstory">
+    <!-- STORY STUDIO -->
+    <section id="story">
       <div class="container">
-        <div class="section-header">
-          <div class="section-tag">How It Started</div>
-          <h2 class="section-title">Backstory: From a Cloud Microphone to TinyLM</h2>
-          <p class="section-desc">The project did not start as a language model. It started as the opposite &mdash; streaming audio to the cloud &mdash; until the requirements flipped the design.</p>
+        <div class="section-head">
+          <div class="section-eyebrow">Live inference · no server</div>
+          <h2 class="section-title">Generate a story, right here</h2>
+          <p class="section-desc">
+            The exact weights of the trained checkpoint (float16, 4.3&nbsp;MB) ship with this page.
+            Pick a character, a mode, a place and a theme — a vanilla-JS forward pass with a KV cache
+            writes a brand-new story while you watch.
+          </p>
         </div>
+        <div class="studio" id="story-studio">
+          <p class="studio-label">Character</p>
+          <div class="studio-chips" id="studio-world"></div>
+          <p class="studio-label">Mode</p>
+          <div class="studio-chips" id="studio-mode"></div>
+          <p class="studio-label">Place</p>
+          <div class="studio-chips" id="studio-place"></div>
+          <p class="studio-label">Theme</p>
+          <div class="studio-chips" id="studio-theme"></div>
+          <button class="studio-go" id="studio-generate" type="button">Tell a story</button>
+          <div class="studio-out" id="studio-output"></div>
+          <div class="studio-stats" id="studio-stats"></div>
+        </div>
+      </div>
+    </section>
 
-        <div class="comp-breakdown-grid">
-          <div class="breakdown-card">
-            <h4>&#127908; 1. Streaming Audio to the Cloud</h4>
+    <!-- ORIGIN / BACKSTORY -->
+    <section id="origin">
+      <div class="container">
+        <div class="section-head">
+          <div class="section-eyebrow">How it started</div>
+          <h2 class="section-title">From a cloud microphone to a 1.67M model</h2>
+          <p class="section-desc">
+            The project did not start as a language model. It started as the opposite — streaming
+            audio to the cloud — until the requirements flipped the design.
+          </p>
+        </div>
+        <div class="card-grid">
+          <div class="ed-card">
+            <span class="ed-card-num">01 · Cloud</span>
+            <h3>Streaming audio to the cloud</h3>
             <p>
-              The first experiments with pocket-sized ESP32-S3 boards streamed the microphone to a server, ran speech-to-text, a cloud LLM and text-to-speech there, and streamed the audio back. The pipeline worked &mdash; but without Wi-Fi, a gateway and someone else's API, the gadget was a paperweight, and every word spoken to it left the house.
+              The first experiments with pocket-sized ESP32-S3 boards streamed the microphone to a server,
+              ran speech-to-text, a cloud LLM and text-to-speech there, and streamed the audio back. The
+              pipeline worked &mdash; but without Wi-Fi, a gateway and someone else&rsquo;s API, the gadget
+              was a paperweight, and every word spoken to it left the house.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#128225; 2. The Requirements Flipped the Design</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">02 · The flip</span>
+            <h3>The requirements flipped the design</h3>
             <p>
-              The real goal was a bedtime device for a 6&ndash;8 year old: the child picks a character and a mode, and the device writes and narrates a 200&ndash;250 word story that always ends with everyone asleep. No cloud service, no LAN server, no runtime Internet after flashing. With the network gone, neural TTS is out too &mdash; narration is pre-recorded clips, so every word the device can ever say must be known in advance.
+              The real goal was a bedtime device for a 6&ndash;8 year old: the child picks a character and a
+              mode, and the device writes and narrates a 200&ndash;250 word story that always ends with
+              everyone asleep. No cloud service, no LAN server, no runtime Internet after flashing. With the
+              network gone, neural TTS is out too &mdash; narration is pre-recorded clips, so every word the
+              device can ever say must be known in advance.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#128214; 3. A Story Engine Came Before the Model</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">03 · The engine</span>
+            <h3>A story engine came before the model</h3>
             <p>
-              The first build was a deterministic C++ story engine: five character worlds, a fixed &ldquo;sleep spine&rdquo; plot skeleton, sixteen beat tables and a validator. It solved narration and safety &mdash; but it is dice: beats are picked from pools, and every story is assembled, never written.
+              The first build was a deterministic C++ story engine: five character worlds, a fixed
+              &ldquo;sleep spine&rdquo; plot skeleton, sixteen beat tables and a validator. It solved
+              narration and safety &mdash; but it is dice: beats are picked from pools, and every story is
+              assembled, never written.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#127891; 4. The Engine Became the Teacher</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">04 · The teacher</span>
+            <h3>The engine became the teacher</h3>
             <p>
-              The same tables generate the training corpus and the entire vocabulary: 752 ids = 30 control tokens + 722 words, closed by construction, so the model can never emit a word without a narration clip. A ~50K-parameter beat selector was on the table too, but a word-level generator is the whole point &mdash; so a 1.67M-parameter decoder-only Transformer was trained from scratch: a few thousand steps on a laptop CPU, then the expanded 57,600-story corpus on a rented T4 GPU. Evaluated by the firmware validator, never perplexity.
+              The same tables generate the training corpus and the entire vocabulary: 752 ids = 30 control
+              tokens + 722 words, closed by construction, so the model can never emit a word without a
+              narration clip. A ~50K-parameter beat selector was on the table too, but a word-level generator
+              is the whole point &mdash; so a 1.67M-parameter decoder-only Transformer was trained from
+              scratch: a few thousand steps on a laptop CPU, then the expanded 57,600-story corpus on a
+              rented T4 GPU. Evaluated by the firmware validator, never perplexity.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#129504; 5. That Model Is TinyLM</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">05 · TinyLM</span>
+            <h3>That model is TinyLM</h3>
             <p>
-              Somewhere along the way the interesting artifact stopped being the appliance and became the model: a complete language model &mdash; tokenizer, training loop, checkpoints, a KV cache proven token-identical to full recompute (4.3&times; faster), a forward-pass tracer and this 30-step walkthrough &mdash; that fits in 867 KiB of INT4 flash.
+              Somewhere along the way the interesting artifact stopped being the appliance and became the
+              model: a complete language model &mdash; tokenizer, training loop, checkpoints, a KV cache
+              proven token-identical to full recompute (4.3&times; faster), a forward-pass tracer and the
+              30-step walkthrough below &mdash; that fits in 867 KiB of INT4 flash.
             </p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 1. ARCHITECTURE DIAGRAM -->
+    <!-- ARCHITECTURE -->
     <section id="architecture">
       <div class="container">
-        <div class="section-header">
-          <div class="section-tag">System Schematic</div>
-          <h2 class="section-title">TinyLM Architecture Diagram</h2>
-          <p class="section-desc">Dataflow and tensor dimensions through the 1,671,296 parameter decoder-only Transformer.</p>
+        <div class="section-head">
+          <div class="section-eyebrow">System schematic</div>
+          <h2 class="section-title">Architecture: tokens in, a story out</h2>
+          <p class="section-desc">
+            Dataflow and tensor dimensions through the 1,671,296-parameter decoder-only Transformer.
+            Every shape below is the contract the embedded C++ runtime has to match.
+          </p>
         </div>
 
-        <div class="diagram-container">
-          <div class="diagram-flow">
+        <div class="diagram">
 
-            <!-- Node 1: Token Input -->
-            <div class="diagram-node">
-              <div class="node-info">
-                <span class="node-tag">Input Stage</span>
-                <span class="node-title">Input Token Sequence</span>
-                <span class="node-desc">Prompt & Context IDs (e.g. &lt;BOS&gt;&lt;CHAR=BLUEY&gt;&lt;MODE=BEDTIME&gt;...)</span>
-              </div>
-              <div class="node-shape">idx: [b, t] &isin; [0 .. 751]</div>
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Input stage</span>
+              <span class="node-title">Input Token Sequence</span>
+              <span class="node-desc">Prompt &amp; context IDs (e.g. &lt;BOS&gt;&lt;CHAR=BLUEY&gt;&lt;MODE=BEDTIME&gt;&hellip;)</span>
             </div>
-
-            <div class="flow-arrow"><span>token IDs</span></div>
-
-            <!-- Node 2: Token Embedding -->
-            <div class="diagram-node" style="border-left: 4px solid var(--primary);">
-              <div class="node-info">
-                <span class="node-tag">Lookup Table (Tied)</span>
-                <span class="node-title">Embedding Matrix (wte)</span>
-                <span class="node-desc">Closed vocabulary word projection (tied with output head)</span>
-              </div>
-              <div class="node-shape">[752, 128] &bull; 96,256 params</div>
-            </div>
-
-            <div class="flow-arrow"><span>x: [b, t, 128]</span></div>
-
-            <!-- Node 3: 8x Transformer Layer Block -->
-            <div class="transformer-layer-box">
-              <div class="layer-badge-repeat">&times; 8 Transformer Layers (Repeated)</div>
-              
-              <div class="sub-branch-grid">
-                <!-- Branch 1: Self Attention -->
-                <div class="sub-branch">
-                  <div class="branch-header">
-                    <span>1. Self-Attention Sublayer</span>
-                    <span>128 &rarr; 128</span>
-                  </div>
-                  
-                  <div class="micro-block">
-                    <span class="mb-name">RMSNorm</span>
-                    <span class="mb-dim">[128] &bull; FP16 scale</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">Fused QKV Linear</span>
-                    <span class="mb-dim">[128, 384] &bull; bias=False</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">Rotary Embeddings (RoPE)</span>
-                    <span class="mb-dim">8 heads &times; head_dim 16</span>
-                  </div>
-                  <div class="micro-block" style="border-color: rgba(6, 182, 212, 0.4); background: rgba(6, 182, 212, 0.08);">
-                    <span class="mb-name">KV Cache (KVBuf)</span>
-                    <span class="mb-dim">[1, 8, ctx, 16] &bull; O(1) step</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">Scaled Dot-Product Attn</span>
-                    <span class="mb-dim">Softmax(QK<sup>T</sup>/&radic;16) &times; V</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">Output Projection Linear</span>
-                    <span class="mb-dim">[128, 128] &bull; bias=False</span>
-                  </div>
-                  <div class="micro-block" style="background: rgba(99, 102, 241, 0.1);">
-                    <span class="mb-name">Residual Connection</span>
-                    <span class="mb-dim">x = x + Attn(x)</span>
-                  </div>
-                </div>
-
-                <!-- Branch 2: Feed Forward Network -->
-                <div class="sub-branch">
-                  <div class="branch-header">
-                    <span>2. Feed-Forward Sublayer (MLP)</span>
-                    <span>128 &rarr; 512 &rarr; 128</span>
-                  </div>
-
-                  <div class="micro-block">
-                    <span class="mb-name">RMSNorm</span>
-                    <span class="mb-dim">[128] &bull; FP16 scale</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">Up Projection Linear (w1)</span>
-                    <span class="mb-dim">[128, 512] &bull; bias=False</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">GELU Non-Linearity</span>
-                    <span class="mb-dim">Gaussian Error Linear Unit</span>
-                  </div>
-                  <div class="micro-block">
-                    <span class="mb-name">Down Projection Linear (w2)</span>
-                    <span class="mb-dim">[512, 128] &bull; bias=False</span>
-                  </div>
-                  <div class="micro-block" style="background: rgba(99, 102, 241, 0.1); margin-top: auto;">
-                    <span class="mb-name">Residual Connection</span>
-                    <span class="mb-dim">x = x + FFN(x)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flow-arrow"><span>hidden state: [b, t, 128]</span></div>
-
-            <!-- Node 4: Final RMSNorm -->
-            <div class="diagram-node">
-              <div class="node-info">
-                <span class="node-tag">Normalization</span>
-                <span class="node-title">Final RMSNorm</span>
-                <span class="node-desc">Stabilizes residual stream before logit projection</span>
-              </div>
-              <div class="node-shape">[128] &bull; 128 params</div>
-            </div>
-
-            <div class="flow-arrow"><span>normalized x: [b, t, 128]</span></div>
-
-            <!-- Node 5: Output Head -->
-            <div class="diagram-node" style="border-left: 4px solid var(--emerald);">
-              <div class="node-info">
-                <span class="node-tag">Output Projection (Tied)</span>
-                <span class="node-title">Language Model Head (lm_head)</span>
-                <span class="node-desc">Reuses embedding matrix: 128 &rarr; 752 vocab logits</span>
-              </div>
-              <div class="node-shape">[128, 752] (Tied: 0 extra params)</div>
-            </div>
-
-            <div class="flow-arrow"><span>logits: [b, t, 752]</span></div>
-
-            <!-- Node 6: Sampling & Decoding -->
-            <div class="diagram-node">
-              <div class="node-info">
-                <span class="node-tag">Sampler & Parser</span>
-                <span class="node-title">Constrained Sampler + Validator</span>
-                <span class="node-desc">Temperature=0.8, Top-K=40, &lt;EOS&gt; Masked, Stop at &lt;/LINE&gt; or &lt;END&gt;</span>
-              </div>
-              <div class="node-shape">Emits next token ID</div>
-            </div>
-
+            <div class="node-shape">idx: [b, t] &isin; [0 .. 751]</div>
           </div>
+
+          <div class="flow-arrow"><span>token IDs</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Lookup table (tied)</span>
+              <span class="node-title">Embedding Matrix</span>
+              <span class="node-desc">Closed-vocabulary word projection, tied with the output head</span>
+            </div>
+            <div class="node-shape">[752, 128] &bull; 96,256 params</div>
+          </div>
+
+          <div class="flow-arrow"><span>x: [b, t, 128]</span></div>
+
+          <div class="layer-frame">
+            <div class="layer-frame-tag">
+              <span>&times; 8 Transformer Layers (Repeated)</span>
+              <span>196,608 params each</span>
+            </div>
+            <div class="sub-grid">
+              <div class="sub-branch">
+                <div class="branch-head"><span>1 &middot; Self-Attention Sublayer</span><span>128 &rarr; 128</span></div>
+                <div class="micro-block"><span>RMSNorm</span><span class="mb-dim">[128]</span></div>
+                <div class="micro-block"><span>Fused QKV Linear</span><span class="mb-dim">[128, 384] &bull; no bias</span></div>
+                <div class="micro-block"><span>Rotary Embeddings (RoPE)</span><span class="mb-dim">8 heads &times; head_dim 16</span></div>
+                <div class="micro-block is-blue"><span>KV Cache (KVBuf)</span><span class="mb-dim">[1, 8, ctx, 16] &bull; O(1) step</span></div>
+                <div class="micro-block"><span>Scaled Dot-Product Attn</span><span class="mb-dim">softmax(QK<sup>T</sup>/&radic;16) &times; V</span></div>
+                <div class="micro-block"><span>Output Projection</span><span class="mb-dim">[128, 128] &bull; no bias</span></div>
+                <div class="micro-block is-accent"><span>Residual Connection</span><span class="mb-dim">x = x + attn(x)</span></div>
+              </div>
+              <div class="sub-branch">
+                <div class="branch-head"><span>2 &middot; Feed-Forward Sublayer (MLP)</span><span>128 &rarr; 512 &rarr; 128</span></div>
+                <div class="micro-block"><span>RMSNorm</span><span class="mb-dim">[128]</span></div>
+                <div class="micro-block"><span>Up Projection</span><span class="mb-dim">[128, 512] &bull; no bias</span></div>
+                <div class="micro-block"><span>GELU Non-Linearity</span><span class="mb-dim">Gaussian error unit</span></div>
+                <div class="micro-block"><span>Down Projection</span><span class="mb-dim">[512, 128] &bull; no bias</span></div>
+                <div class="micro-block is-accent"><span>Residual Connection</span><span class="mb-dim">x = x + ffn(x)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-arrow"><span>hidden state: [b, t, 128]</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Normalization</span>
+              <span class="node-title">Final RMSNorm</span>
+              <span class="node-desc">Stabilizes the residual stream before logit projection</span>
+            </div>
+            <div class="node-shape">[128] &bull; 128 params</div>
+          </div>
+
+          <div class="flow-arrow"><span>normalized x: [b, t, 128]</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Output projection (tied)</span>
+              <span class="node-title">Language Model Head</span>
+              <span class="node-desc">Reuses the embedding matrix: 128 &rarr; 752 vocab logits</span>
+            </div>
+            <div class="node-shape">[128, 752] &bull; 0 extra params</div>
+          </div>
+
+          <div class="flow-arrow"><span>logits: [b, t, 752]</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Sampler &amp; parser</span>
+              <span class="node-title">Constrained Sampler + Validator</span>
+              <span class="node-desc">Temperature 0.8, top-k 40, &lt;EOS&gt; masked, stop at &lt;/LINE&gt; or &lt;END&gt;, duplicate lines resampled</span>
+            </div>
+            <div class="node-shape">Emits next token ID</div>
+          </div>
+
         </div>
       </div>
     </section>
 
-    <!-- 2. EXPLANATION OF EACH COMPONENT -->
+    <!-- COMPONENTS -->
     <section id="components">
       <div class="container">
-        <div class="section-header">
-          <div class="section-tag">Deep Dive</div>
-          <h2 class="section-title">Component-by-Component Explanation</h2>
-          <p class="section-desc">Detailed mathematical design, parameter counts, and embedded tradeoffs for every building block of the model.</p>
+        <div class="section-head">
+          <div class="section-eyebrow">Deep dive</div>
+          <h2 class="section-title">Every component, and why it earned its bytes</h2>
+          <p class="section-desc">
+            Parameter counts, the maths, and the embedded tradeoffs behind each building block.
+          </p>
         </div>
 
         <div class="components-grid">
 
-          <!-- 1. Tokenizer & Closed Vocab -->
           <div class="comp-card">
             <span class="comp-card-badge">01 &bull; Vocabulary</span>
             <h3>752 Closed Token Vocabulary</h3>
@@ -1494,13 +1469,12 @@
             <div class="comp-specs">
               <div>&bull; Total IDs: <span>752 (30 control + 722 words)</span></div>
               <div>&bull; Out-of-vocabulary rate: <span>0.0% (closed domain)</span></div>
-              <div>&bull; Unapproved word risk: <span>Physically impossible (no logits)</span></div>
+              <div>&bull; Unapproved word risk: <span>physically impossible (no logits)</span></div>
             </div>
           </div>
 
-          <!-- 2. Tied Embeddings -->
           <div class="comp-card">
-            <span class="comp-card-badge">02 &bull; Weights Optimization</span>
+            <span class="comp-card-badge">02 &bull; Weights optimization</span>
             <h3>Tied Input/Output Embeddings</h3>
             <p>
               The token embedding tensor <code>[752, 128]</code> is weight-tied with the output classification head (<code>head.weight = embed.weight</code>). The model uses the exact same vector representation for token intake and token probability projection.
@@ -1508,91 +1482,85 @@
             <div class="comp-specs">
               <div>&bull; Weight shape: <span>[752, 128]</span></div>
               <div>&bull; Parameter count: <span>96,256 params</span></div>
-              <div>&bull; Memory saved: <span>96.25 KB (50% reduction in vocab footprint)</span></div>
+              <div>&bull; Memory saved: <span>96.25 KB (50% of the vocab footprint)</span></div>
             </div>
           </div>
 
-          <!-- 3. RMSNorm -->
           <div class="comp-card">
             <span class="comp-card-badge">03 &bull; Normalization</span>
-            <h3>Root Mean Square Normalization (RMSNorm)</h3>
+            <h3>Root Mean Square Normalization</h3>
             <p>
               RMSNorm replaces traditional LayerNorm. Instead of computing both mean and variance, it scales activations solely by their root mean square: <code>RMS(x) = &radic;(&sum; x<sub>i</sub><sup>2</sup> / d)</code>. This eliminates mean-centering subtraction passes, speeding up inner loops on ESP32-S3 SIMD.
             </p>
             <div class="comp-specs">
-              <div>&bull; Per layer: <span>2 RMSNorms (Pre-Attn & Pre-FFN)</span></div>
-              <div>&bull; Final Norm: <span>1 RMSNorm [128]</span></div>
-              <div>&bull; Biases: <span>Zero (bias=False throughout)</span></div>
+              <div>&bull; Per layer: <span>2 RMSNorms (pre-attn &amp; pre-ffn)</span></div>
+              <div>&bull; Final norm: <span>1 RMSNorm [128]</span></div>
+              <div>&bull; Biases: <span>zero (no bias parameters anywhere)</span></div>
             </div>
           </div>
 
-          <!-- 4. Multi-Head Attention & Fused QKV -->
           <div class="comp-card">
-            <span class="comp-card-badge">04 &bull; Attention Mechanism</span>
-            <h3>Fused Multi-Head Attention (MHA)</h3>
+            <span class="comp-card-badge">04 &bull; Attention mechanism</span>
+            <h3>Fused Multi-Head Attention</h3>
             <p>
-              Projects the 128-dimensional hidden state into Query, Key, and Value vectors in a single fused linear layer <code>[128, 384]</code>. 8 attention heads with dimension 16 calculate scaled dot-product causal attention: <code>Softmax(Q &times; K<sup>T</sup> / &radic;16) &times; V</code>.
+              Projects the 128-dimensional hidden state into Query, Key, and Value vectors in a single fused linear layer <code>[128, 384]</code>. 8 attention heads with dimension 16 calculate scaled dot-product causal attention: <code>softmax(Q &times; K<sup>T</sup> / &radic;16) &times; V</code>.
             </p>
             <div class="comp-specs">
               <div>&bull; Heads: <span>8 heads &times; head_dim 16 = 128 width</span></div>
-              <div>&bull; Per-layer params: <span>qkv: 49,152 + proj: 16,384 = 65,536</span></div>
+              <div>&bull; Per-layer params: <span>qkv 49,152 + proj 16,384 = 65,536</span></div>
               <div>&bull; Total attention params (8 layers): <span>524,288 params</span></div>
             </div>
           </div>
 
-          <!-- 5. RoPE Positional Encoding -->
           <div class="comp-card">
-            <span class="comp-card-badge">05 &bull; Position Encoding</span>
+            <span class="comp-card-badge">05 &bull; Position encoding</span>
             <h3>Rotary Position Embeddings (RoPE)</h3>
             <p>
-              Rather than storing learned absolute positional lookup tables (which take precious Flash memory and fail to extrapolate), RoPE rotates Query and Key vector pairs in 2D coordinate planes using precomputed cosine and sine frequencies: <code>freqs = pos &times; 10000<sup>-2i/d</sup></code>.
+              Rather than storing learned absolute positional lookup tables (which take precious flash memory and fail to extrapolate), RoPE rotates Query and Key vector pairs in 2D coordinate planes using precomputed cosine and sine frequencies: <code>freqs = pos &times; 10000<sup>&minus;2i/d</sup></code>.
             </p>
             <div class="comp-specs">
-              <div>&bull; Max Context Window: <span>384 tokens</span></div>
-              <div>&bull; Memory footprint: <span>Zero Flash weights (computed on the fly)</span></div>
-              <div>&bull; Property: <span>Relative token distance is strictly preserved</span></div>
+              <div>&bull; Max context window: <span>384 tokens</span></div>
+              <div>&bull; Memory footprint: <span>zero flash weights (computed on the fly)</span></div>
+              <div>&bull; Property: <span>relative token distance strictly preserved</span></div>
             </div>
           </div>
 
-          <!-- 6. Preallocated KV Cache -->
           <div class="comp-card">
-            <span class="comp-card-badge">06 &bull; Runtime Acceleration</span>
+            <span class="comp-card-badge">06 &bull; Runtime acceleration</span>
             <h3>Preallocated Key-Value Cache (KVBuf)</h3>
             <p>
               Stores previous Keys and Values in a dedicated buffer (<code>[1, 8, ctx, 16]</code> per layer). The prompt is processed once during prefill; each new token only calculates its own single QKV projection and appends to the cache, converting an <code>O(N<sup>2</sup>)</code> loop into an <code>O(1)</code> step.
             </p>
             <div class="comp-specs">
-              <div>&bull; Buffer shape: <span>8 layers &times; 2 (K/V) &times; 384 ctx &times; 128 dim</span></div>
-              <div>&bull; Cache RAM size: <span>768 KiB in INT8 (9.6% of 8MB PSRAM)</span></div>
-              <div>&bull; Latency impact: <span>11 mins &rarr; 0.95s (&gt;600&times; speedup)</span></div>
+              <div>&bull; Buffer shape: <span>8 layers &times; 2 (K/V) &times; 384 ctx &times; 16 head_dim</span></div>
+              <div>&bull; Cache RAM size: <span>768 KiB in INT8 (9.6% of 8 MB PSRAM)</span></div>
+              <div>&bull; Host speedup: <span>4.3&times; wall-clock, token-identical output</span></div>
             </div>
           </div>
 
-          <!-- 7. Feed-Forward Network -->
           <div class="comp-card">
-            <span class="comp-card-badge">07 &bull; Non-Linearity</span>
-            <h3>GELU Feed-Forward Network (FFN)</h3>
+            <span class="comp-card-badge">07 &bull; Non-linearity</span>
+            <h3>GELU Feed-Forward Network</h3>
             <p>
               A two-layer MLP expanding hidden representations from <code>d_model=128</code> to <code>ffn=512</code> via <code>w_up</code>, passing through Gaussian Error Linear Unit (GELU) activation, and projecting back to 128 via <code>w_down</code> with a residual addition: <code>x = x + down(GELU(up(norm(x))))</code>.
             </p>
             <div class="comp-specs">
-              <div>&bull; Up / Down projections: <span>[128, 512] and [512, 128]</span></div>
+              <div>&bull; Up / down projections: <span>[128, 512] and [512, 128]</span></div>
               <div>&bull; Per-layer FFN params: <span>131,072 params</span></div>
               <div>&bull; Total FFN params (8 layers): <span>1,048,576 params</span></div>
             </div>
           </div>
 
-          <!-- 8. INT4 Quantization -->
           <div class="comp-card">
             <span class="comp-card-badge">08 &bull; Quantization</span>
             <h3>Groupwise INT4 Compression</h3>
             <p>
-              To fit the entire 1,671,296 parameters into the ESP32-S3's 8 MB Flash, weights are quantized to symmetric 4-bit integers (two weights per byte) with FP16 scale factors per group of 64 weights. Activations remain INT8/FP16, enabling SIMD dot products via ESP32-S3 PIE instructions.
+              To fit the entire 1,671,296 parameters into the target's 8 MB flash, weights are quantized to symmetric 4-bit integers (two weights per byte) with FP16 scale factors per group of 64 weights. Activations remain INT8/FP16, enabling SIMD dot products on the microcontroller.
             </p>
             <div class="comp-specs">
               <div>&bull; Effective bit-width: <span>4.25 bits/weight (4-bit + FP16 scale/64)</span></div>
               <div>&bull; Weight binary size: <span>867 KiB</span></div>
-              <div>&bull; Full Model footprint: <span>867 KiB weights + 768 KiB cache = 1.63 MB</span></div>
+              <div>&bull; Full model footprint: <span>867 KiB weights + 768 KiB cache = 1.63 MB</span></div>
             </div>
           </div>
 
@@ -1600,13 +1568,16 @@
       </div>
     </section>
 
-    <!-- 3. UNDER THE HOOD: STEP-BY-STEP WALKTHROUGH -->
+    <!-- WALKTHROUGH (interactive, driven by walkthrough.js) -->
     <section id="walkthrough">
       <div class="container">
-        <div class="section-header">
-          <div class="section-tag">Interactive Step-by-Step Execution</div>
-          <h2 class="section-title">Under the Hood: From Prompt to Next Token</h2>
-          <p class="section-desc">Slowed down so anyone can follow: inspect the real trained model weights, the starting prompt, how tokens travel through all 8 layers, and how the next token is chosen.</p>
+        <div class="section-head">
+          <div class="section-eyebrow">Interactive step-by-step execution</div>
+          <h2 class="section-title">Under the hood: from prompt to next token</h2>
+          <p class="section-desc">
+            Slowed down so anyone can follow: inspect the real trained model weights, the starting prompt,
+            how tokens travel through all 8 layers, and how the next token is chosen.
+          </p>
         </div>
 
         <div class="wt-card">
@@ -1619,9 +1590,9 @@
           <!-- Playback & Controls Bar -->
           <div class="wt-controls-bar">
             <div class="wt-btn-group">
-              <button id="wt-prev" class="wt-ctrl-btn" type="button" aria-label="Previous step">◀ Prev</button>
-              <button id="wt-play" class="wt-ctrl-btn wt-play-btn" type="button" aria-pressed="false">▶ Play</button>
-              <button id="wt-next" class="wt-ctrl-btn" type="button" aria-label="Next step">Next ▶</button>
+              <button id="wt-prev" class="wt-ctrl-btn" type="button" aria-label="Previous step">&larr; Prev</button>
+              <button id="wt-play" class="wt-ctrl-btn wt-play-btn" type="button" aria-pressed="false">&#9654; Play</button>
+              <button id="wt-next" class="wt-ctrl-btn" type="button" aria-label="Next step">Next &rarr;</button>
             </div>
 
             <div class="wt-speed-wrap">
@@ -1643,7 +1614,6 @@
 
           <!-- Main Layout Grid (Map on left, Step View on right) -->
           <div class="wt-layout-grid">
-            <!-- Left: Residual Stream Map across all tokens & layers -->
             <aside class="wt-sidebar-map">
               <div class="wt-map-heading">
                 <span>Residual Stream Map</span>
@@ -1655,7 +1625,6 @@
               </div>
             </aside>
 
-            <!-- Right: Dynamic Step Panel -->
             <div class="wt-main-panel" id="wt-panel">
               <div class="wt-header-block">
                 <div id="wt-kicker" class="wt-kicker-tag">Step 0 &bull; Model Weights</div>
@@ -1664,11 +1633,9 @@
                   Before any story is written, the model is just a big pile of numbers called weights...
                 </p>
                 <div id="wt-numbers" class="wt-numbers-box">
-                  Checkpoint: embedded_big.pt &bull; 51 tensors &bull; FP32 / INT4
+                  Checkpoint: embedded_big.pt &bull; 50 tensors &bull; FP32 host build
                 </div>
               </div>
-
-              <!-- Visual Workspace (rendered by walkthrough.js) -->
               <div id="wt-visual" class="wt-visual-workspace"></div>
             </div>
           </div>
@@ -1676,21 +1643,23 @@
       </div>
     </section>
 
-    <!-- 4. COMPARISON: TINYLM VS REGULAR LLM -->
-    <section id="comparison" class="comparison-section">
+    <!-- COMPARISON -->
+    <section id="comparison">
       <div class="container">
-        <div class="section-header">
-          <div class="section-tag">Comprehensive Analysis</div>
-          <h2 class="section-title">TinyLM vs. Regular LLM</h2>
-          <p class="section-desc">Comparing an edge-native embedded appliance model against standard multi-billion parameter foundation models.</p>
+        <div class="section-head">
+          <div class="section-eyebrow">Comprehensive analysis</div>
+          <h2 class="section-title">TinyLM vs. regular LLMs</h2>
+          <p class="section-desc">
+            An edge-native embedded appliance model against standard multi-billion parameter foundation models.
+          </p>
         </div>
 
-        <div class="table-wrapper">
+        <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Engineering Attribute</th>
-                <th>TinyLM (1.67M) <span class="pill-tiny">Embedded Target</span></th>
+                <th class="pill-th">TinyLM (1.67M) <span class="pill-note">Embedded target</span></th>
                 <th>Standard Local LLM (7B&ndash;8B INT4)</th>
                 <th>Frontier Cloud LLM (GPT-4 / Claude)</th>
               </tr>
@@ -1733,7 +1702,7 @@
                 <td class="cell-normal">$30,000+ per GPU accelerator</td>
               </tr>
               <tr>
-                <td class="cell-dim">Tokenizer & Vocab</td>
+                <td class="cell-dim">Tokenizer &amp; Vocab</td>
                 <td class="cell-tiny">752 Closed IDs (No subwords, no byte fallback)</td>
                 <td class="cell-normal">32,000 &ndash; 128,256 Subword BPE</td>
                 <td class="cell-normal">100,000 &ndash; 200,000 Multilingual BPE</td>
@@ -1745,10 +1714,10 @@
                 <td class="cell-normal">Billions of MACs per token</td>
               </tr>
               <tr>
-                <td class="cell-dim">Safety & Hallucination</td>
-                <td class="cell-tiny">Guaranteed by closed vocabulary & C++ validator</td>
+                <td class="cell-dim">Safety &amp; Hallucination</td>
+                <td class="cell-tiny">Guaranteed by closed vocabulary &amp; C++ validator</td>
                 <td class="cell-normal">Probabilistic RLHF / Guardrail filters (Jailbreakable)</td>
-                <td class="cell-normal">Alignment wrappers & moderation API endpoints</td>
+                <td class="cell-normal">Alignment wrappers &amp; moderation API endpoints</td>
               </tr>
               <tr>
                 <td class="cell-dim">Speech / Audio Narration</td>
@@ -1757,7 +1726,7 @@
                 <td class="cell-normal">Cloud streaming voice synthesis API</td>
               </tr>
               <tr>
-                <td class="cell-dim">Network & Privacy</td>
+                <td class="cell-dim">Network &amp; Privacy</td>
                 <td class="cell-tiny">100% Offline, air-gapped, zero telemetry</td>
                 <td class="cell-normal">Local runtime (offline capable)</td>
                 <td class="cell-normal">Requires active WAN internet connection</td>
@@ -1766,52 +1735,63 @@
           </table>
         </div>
 
-        <!-- 4 Comparative Deep-Dive Pillars -->
-        <div class="comp-breakdown-grid">
-          <div class="breakdown-card">
-            <h4>&#128187; 1. Computational Scale</h4>
+        <div class="pillar-grid">
+          <div class="ed-card">
+            <span class="ed-card-num">Pillar 1</span>
+            <h4>Computational Scale</h4>
             <p>
-              A standard 7B model requires roughly <strong>4,200&times; more parameters</strong> and &gt;5,000&times; more multiply-accumulate operations per token than the TinyLM. The TinyLM fits entirely into the 8 MB PSRAM of an embedded microcontroller with 74% free safety headroom remaining.
+              A standard 7B model requires roughly <strong>4,200&times; more parameters</strong> and &gt;5,000&times;
+              more multiply-accumulate operations per token than the TinyLM. The TinyLM fits entirely into the
+              8 MB PSRAM of an embedded microcontroller with 74% free safety headroom remaining.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#128274; 2. Vocabulary & Hallucination Boundary</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">Pillar 2</span>
+            <h4>Vocabulary &amp; Hallucination Boundary</h4>
             <p>
-              Regular LLMs can assemble arbitrary toxic, violent, or dangerous strings because subword BPE permits open generation. In contrast, the TinyLM's output projection head contains only 752 rows: unapproved words simply have no representation in silicon.
+              Regular LLMs can assemble arbitrary toxic, violent, or dangerous strings because subword BPE permits
+              open generation. In contrast, the TinyLM's output projection head contains only 752 rows: unapproved
+              words simply have no representation in silicon.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#9889; 3. Head Cost & Memory Bandwidth</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">Pillar 3</span>
+            <h4>Head Cost &amp; Memory Bandwidth</h4>
             <p>
-              In open LLMs, the classification head (e.g. 128k vocab &times; 4096 dim) accounts for over 60% of inference latency. The TinyLM's tied 752-word head requires only 96K operations per token, allowing seamless 250+ tokens/sec execution without starving hardware memory channels.
+              In open LLMs, the classification head (e.g. 128k vocab &times; 4096 dim) accounts for over 60% of
+              inference latency. The TinyLM's tied 752-word head requires only 96K operations per token, allowing
+              seamless 250+ tokens/sec execution without starving hardware memory channels.
             </p>
           </div>
-
-          <div class="breakdown-card">
-            <h4>&#127911; 4. Zero-Underrun Audio Coupling</h4>
+          <div class="ed-card">
+            <span class="ed-card-num">Pillar 4</span>
+            <h4>Zero-Underrun Audio Coupling</h4>
             <p>
-              Because TinyLM drafts an entire 23-line bedtime story in under 1 second, generation is ~30&times; faster than human playback (111 seconds). Sentences are passed to an IMA ADPCM audio DMA stream with guaranteed zero audio glitching or buffer starvation.
+              Because TinyLM drafts an entire 23-line bedtime story in under 1 second, generation is
+              ~30&times; faster than human playback (111 seconds). Sentences are passed to an IMA ADPCM audio
+              DMA stream with guaranteed zero audio glitching or buffer starvation.
             </p>
           </div>
         </div>
       </div>
     </section>
+
   </main>
 
-  <!-- Footer -->
   <footer>
     <div class="container">
-      <p><strong>TinyLM Architecture &amp; Comparison Specification</strong></p>
-      <p style="font-size: 0.78rem; margin-top: 4px; color: var(--text-dim);">
-        Decoder-only 1.67M Transformer &bull; Tied Embeddings &bull; RoPE &bull; RMSNorm &bull; INT4 Quantized
+      <p class="footer-title">Decoder-only 1.67M Transformer</p>
+      <p class="footer-line">Tied Embeddings &bull; RoPE &bull; RMSNorm &bull; GELU &bull; 752-token closed vocabulary &bull; INT4 quantized</p>
+      <p class="footer-line">
+        <a href="https://github.com/hariharaprasadr/tinylm">github.com/hariharaprasadr/tinylm</a>
+        &nbsp;&middot;&nbsp; Live inference on this page runs entirely in your browser
       </p>
     </div>
   </footer>
 
-  <!-- Interactive Walkthrough Scripts -->
   <script src="trace_data.js"></script>
+  <script src="story_data.js"></script>
   <script src="walkthrough.js"></script>
+  <script src="story.js"></script>
 </body>
 </html>

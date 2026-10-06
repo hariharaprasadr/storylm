@@ -2,7 +2,7 @@
 
 An edge-native, ultra-compact generative language model engineered for resource-constrained microcontrollers and embedded devices (such as the ESP32-S3), accompanied by a mathematical forward-pass tracer and an interactive web visualizer.
 
-![Architecture Overview](web/preview.png) <!-- (or open web/index.html) -->
+![Architecture Overview](web/preview.jpg) <!-- (or open web/index.html) -->
 
 ---
 
@@ -98,13 +98,17 @@ tinylm/
 │   ├── train_model.py            # Local PyTorch training loop (AdamW, Cosine LR)
 │   ├── prepare_data.py           # Corpus tokenization & .npz dataset packing
 │   ├── export_trace.py           # Mathematical forward pass tracer -> web/trace_data.js
+│   ├── export_story.py           # Full fp16 weights + prompts -> web/story_data.js
 │   ├── modal_train.py            # Scalable Cloud GPU training script (Modal)
 │   └── sample.py                 # Evaluation & sampling harness
 │
 ├── web/                          # Standalone Interactive Web Visualizer
-│   ├── index.html                # Full Explainer: Architecture, Components, Walkthrough
+│   ├── index.html                # Storybook design: Story Studio, Architecture, Walkthrough
+│   ├── story.js                  # Vanilla-JS port of the model: live in-browser generation
+│   ├── story_data.js             # Real checkpoint weights, fp16 + base64 (~4.3 MB)
 │   ├── walkthrough.js            # 30-step forward pass interactive player
-│   └── trace_data.js             # Static model weights & forward pass trace (190 KB)
+│   ├── trace_data.js             # Forward pass trace for the walkthrough (190 KB)
+│   └── preview.jpg               # Full-page screenshot of the visualizer
 │
 └── docs/                         # Technical Specs & Architecture Notes
     ├── tiny_model.md             # 1.67M model architecture & memory budget
@@ -142,6 +146,7 @@ Explore the inner workings of the model in your browser:
 python cli.py web
 ```
 This serves `web/index.html`, which features:
+- **Story Studio — Live In-Browser Generation**: the page ships the real checkpoint weights (fp16, ~4.3 MB) and a vanilla-JS port of the model with a KV cache; pick character, mode, place and theme, and a brand-new story is generated live in the browser (~80-100 tok/s, no server).
 - **Interactive Dataflow Diagram**: View tensor shapes through Embeddings, 8x Transformer Layers, and Output Head.
 - **Component Breakdown**: Deep dives into RMSNorm, RoPE, Preallocated KV-Cache, and GELU FFN.
 - **"Under the Hood" Walkthrough**: A 30-step slowed-down execution of a real forward pass:

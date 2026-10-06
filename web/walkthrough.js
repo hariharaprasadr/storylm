@@ -28,8 +28,8 @@
   }
   function rgb(v, scale) {
     const x = Math.max(-1, Math.min(1, v / scale));
-    const base = [15, 23, 42];
-    const hi = x >= 0 ? [251, 146, 60] : [56, 189, 248];
+    const base = [247, 243, 234];
+    const hi = x >= 0 ? [184, 80, 31] : [49, 89, 143];
     const t = Math.abs(x);
     return base.map((b, i) => Math.round(b + (hi[i] - b) * t));
   }
@@ -98,10 +98,10 @@
       const bh = (n / max) * (H - 18);
       const mid = h.min + ((i + 0.5) / h.counts.length) * (h.max - h.min);
       const [r, g, b] = rgb(mid, Math.max(Math.abs(h.min), Math.abs(h.max)));
-      ctx.fillStyle = `rgb(${Math.max(r, 70)},${Math.max(g, 80)},${Math.max(b, 110)})`;
+      ctx.fillStyle = `rgb(${Math.min(r, 226)},${Math.min(g, 220)},${Math.min(b, 210)})`;
       ctx.fillRect(i * bw + 1, H - 14 - bh, bw - 2, bh);
     });
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = "#6a5f4d";
     ctx.font = "11px JetBrains Mono, monospace";
     ctx.fillText(h.min.toFixed(2), 2, H - 2);
     const mx = h.max.toFixed(2);
@@ -427,7 +427,7 @@
       g.append(el("span", "wt-attn-h wt-attn-r", toks[i].replace(/^<|>$/g, "")));
       row.forEach((p, j) => {
         const c = el("span", "wt-attn-cell" + (j > i ? " is-masked" : ""), j > i ? "" : Math.round(p * 100));
-        if (j <= i) c.style.background = `rgba(251,146,60,${0.08 + p * 0.85})`;
+        if (j <= i) c.style.background = `rgba(184,80,31,${0.08 + p * 0.85})`;
         g.append(c);
       });
     });
