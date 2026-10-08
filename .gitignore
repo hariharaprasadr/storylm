@@ -30,8 +30,13 @@ ENV/
 # Modal / cloud training downloads (regenerate via training/README.md)
 artifacts/
 
-# large derived corpus (170 MB, exceeds GitHub's 100 MB file limit)
+# large raw corpora (~200 MB each, exceeds GitHub's 100 MB file limit):
+# regenerate with `make corpus`, or rebuild from the committed shards with
+# `make corpus-join`. The shards themselves (data/processed/corpus/*.jsonl.gz,
+# ~1.6 MB each) are tracked.
+data/processed/train.jsonl
 data/processed/train_big.jsonl
+data/processed/train_v2.jsonl
 
 # Vercel project link (org/project ids; never commit)
 .vercel/

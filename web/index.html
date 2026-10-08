@@ -25,6 +25,7 @@
         <li><a href="#origin">Origin</a></li>
         <li><a href="#architecture">Architecture</a></li>
         <li><a href="#components">Components</a></li>
+        <li><a href="#training">Training</a></li>
         <li><a href="walkthrough.html">Walkthrough</a></li>
         <li><a href="#comparison">Comparison</a></li>
       </ul>
@@ -368,6 +369,207 @@
           </div>
 
         </div>
+      </div>
+    </section>
+
+    <!-- TRAINING -->
+    <section id="training">
+      <div class="container">
+        <div class="section-head">
+          <div class="section-eyebrow">From the story engine to the weights</div>
+          <h2 class="section-title">How this model was trained</h2>
+          <p class="section-desc">
+            Nothing is downloaded and no tokenizer is trained: the story engine writes the corpus, the
+            corpus defines the vocabulary, the loss is masked to the story tokens, and the firmware's own
+            validator — not perplexity — decides whether the result is good.
+          </p>
+        </div>
+
+        <div class="diagram">
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Step 1 &middot; the teacher</span>
+              <span class="node-title">Story engine generates the corpus</span>
+              <span class="node-desc">The C++ engine that narrates on the device also writes the training data: 5 series &times; modes &times; places &times; themes &times; props, 23 lines per story</span>
+            </div>
+            <div class="node-shape">2,880 &rarr; 57,600 stories</div>
+          </div>
+
+          <div class="flow-arrow"><span>5 series &bull; 4 modes &bull; per-series places &bull; 4 themes &bull; 7 props each</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Step 2 &middot; no tokenizer training</span>
+              <span class="node-title">The engine dumps the token table</span>
+              <span class="node-desc">No BPE, no byte fallback: 30 control tokens plus 722 words, closed by construction, one narration clip per word</span>
+            </div>
+            <div class="node-shape">752 ids &bull; 30 control + 722 words</div>
+          </div>
+
+          <div class="flow-arrow"><span>ids, matched exactly as the firmware matches them</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Step 3 &middot; packing</span>
+              <span class="node-title">Encode the exact stream the device reads</span>
+              <span class="node-desc">&lt;BOS&gt; prompt tokens, then &lt;LINE&gt; words &lt;/LINE&gt; per line, &lt;END&gt;, &lt;EOS&gt;; padded to 384; an unknown word is a hard error</span>
+            </div>
+            <div class="node-shape">ids [n, 384] &bull; mask [n, 384]</div>
+          </div>
+
+          <div class="flow-arrow"><span>story tokens only carry loss — nothing is learned from predicting the prompt</span></div>
+
+          <div class="layer-frame">
+            <div class="layer-frame-tag">
+              <span>Step 4 &middot; the training loop (one function, CPU and GPU)</span>
+              <span>1,671,296 params</span>
+            </div>
+            <div class="sub-grid">
+              <div class="sub-branch">
+                <div class="branch-head"><span>Objective &amp; schedule</span><span>AdamW</span></div>
+                <div class="micro-block"><span>Causal next-token prediction</span><span class="mb-dim">loss masked to story tokens</span></div>
+                <div class="micro-block"><span>Learning rate 3e-4 &bull; weight decay 0.1</span><span class="mb-dim">OneCycle, 100 warmup steps</span></div>
+                <div class="micro-block"><span>Gradient clipping 1.0</span><span class="mb-dim">batch 16 (CPU) / 64 (T4)</span></div>
+                <div class="micro-block is-blue"><span>Deterministic: seed 0</span><span class="mb-dim">95 / 5 train-val split</span></div>
+              </div>
+              <div class="sub-branch">
+                <div class="branch-head"><span>What is measured</span><span>every 100 / 500 steps</span></div>
+                <div class="micro-block"><span>Masked cross-entropy (train / val)</span><span class="mb-dim">starts ~36, ends 0.26</span></div>
+                <div class="micro-block"><span>Checkpoint = config + tensors</span><span class="mb-dim">51 tensors (tied head stored twice)</span></div>
+                <div class="micro-block"><span>Sampled story after the run</span><span class="mb-dim">generate &rarr; canonicalise &rarr; validate</span></div>
+                <div class="micro-block is-accent"><span>Verdict is the firmware validator</span><span class="mb-dim">not perplexity</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-arrow"><span>same core in both places — the GPU run cannot drift from the CPU run</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Step 5 &middot; the expanded run</span>
+              <span class="node-title">Modal T4: 5,400 steps &times; batch 64</span>
+              <span class="node-desc">About six epochs of the 57,600-story corpus (~22 minutes of GPU time). The GPU only trains: canonicalisation and validation need the engine binary, so they stay on the host</span>
+            </div>
+            <div class="node-shape">checkpoints/embedded_big.pt</div>
+          </div>
+
+          <div class="flow-arrow"><span>100 sampled stories, five worlds &times; four themes &times; five repeats</span></div>
+
+          <div class="diagram-node">
+            <div>
+              <span class="node-kicker">Step 6 &middot; evaluation</span>
+              <span class="node-title">Three numbers, not one</span>
+              <span class="node-desc">Validator pass rate, lines word-exact to an engine line, and lines outside the prompt's inventory — a pass rate alone cannot see drift inside a beat</span>
+            </div>
+            <div class="node-shape">100/100 &bull; 99.7&nbsp;% &bull; 0.13&nbsp;%</div>
+          </div>
+
+        </div>
+
+        <div class="card-grid" style="margin-top: 28px;">
+
+          <div class="ed-card">
+            <span class="ed-card-num">Design choice 1</span>
+            <h4>The engine is the teacher</h4>
+            <p>
+              Every training sentence was generated by the same C++ engine that runs on the device, so the
+              model can only ever learn words the device can speak. That is what makes "every word has a
+              narration clip" a property of the model instead of a hope.
+            </p>
+          </div>
+
+          <div class="ed-card">
+            <span class="ed-card-num">Design choice 2</span>
+            <h4>Loss masked to the story</h4>
+            <p>
+              Prompt tokens and padding carry no loss, so the model is trained only to continue after
+              <code>&lt;LINE&gt;</code> — it learns to write the story, not to re-predict the child's choices.
+              The mask is built by the same script that encodes the tokens.
+            </p>
+          </div>
+
+          <div class="ed-card">
+            <span class="ed-card-num">Design choice 3</span>
+            <h4>The cache is tested, not assumed</h4>
+            <p>
+              The decoder ships with a KV cache because the device cannot afford a full recompute per
+              token. A dedicated test proves the cached path matches the uncached one: worst logit
+              difference 1.7e-5, greedy stories identical, 2.1&times; faster on a 272-token story.
+            </p>
+          </div>
+
+          <div class="ed-card">
+            <span class="ed-card-num">Design choice 4</span>
+            <h4>Checked for memorisation</h4>
+            <p>
+              The validator cannot see a story copied out of the corpus — every word in it is approved.
+              So the split the model never trained on is scored separately, and every generated story is
+              compared against the whole corpus: held-out loss equal to training loss (gap −0.000 nats),
+              no story sharing a six-line run with any training story, and 100/100 distinct stories for
+              repeated prompts.
+            </p>
+          </div>
+
+          <div class="ed-card">
+            <span class="ed-card-num">Honest ceiling</span>
+            <h4>It beats the dice, not the author</h4>
+            <p>
+              Trained on the engine's own templates, the model learns the template distribution: it
+              chooses which beat comes next, and in which order, better than a random draw — but it cannot
+              invent new sentences. Freshness comes from authoring more beats, props and worlds; the corpus
+              generator then scales for free.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="table-wrap" style="margin-top: 28px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Measured, 100 sampled stories each</th>
+                <th>CPU &bull; 4,000 steps &bull; 2,880 stories</th>
+                <th class="pill-th">Modal T4 &bull; 5,400 steps <span class="pill-note">Shipped model</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="cell-dim">Masked validation loss</td>
+                <td class="cell-normal">0.290</td>
+                <td class="cell-tiny">0.267</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">Validator pass rate</td>
+                <td class="cell-normal">97 / 100</td>
+                <td class="cell-tiny">100 / 100</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">Lines word-exact to an engine line</td>
+                <td class="cell-normal">99.3&nbsp;%</td>
+                <td class="cell-tiny">99.7&nbsp;%</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">Lines outside the prompt's inventory</td>
+                <td class="cell-normal">0.88&nbsp;%</td>
+                <td class="cell-tiny">0.13&nbsp;%</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">Wall clock</td>
+                <td class="cell-normal">659 s (batch 16)</td>
+                <td class="cell-tiny">1,344 s (batch 64)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="section-desc" style="margin-top: 20px;">
+          The last row is the one that matters: out-of-inventory lines are the only ones the engine's
+          fallback tier has to cover, and a 6.8&times; drop in them is worth more than the loss curve.
+          The full pipeline — every command, hyperparameter and caveat — is written up in
+          <a href="https://github.com/hariharaprasadr/storylm/blob/main/docs/training.md">docs/training.md</a>.
+        </p>
+
       </div>
     </section>
 

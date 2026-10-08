@@ -1,0 +1,43 @@
+vocab 3589 | total params 2,034,432 | INT4 1055 KiB | KV INT8 768 KiB | ctx 384
+step    250  train 1.921  val 1.906  lr 2.99e-04  1050.3s
+step    500  train 0.362  val 0.353  lr 2.92e-04  2658.6s
+step    750  train 0.144  val 0.142  lr 2.80e-04  2716.2s
+step   1000  train 0.102  val 0.106  lr 2.62e-04  2773.0s
+step   1250  train 0.093  val 0.094  lr 2.40e-04  2830.0s
+step   1500  train 0.085  val 0.085  lr 2.14e-04  2886.9s
+step   1750  train 0.081  val 0.076  lr 1.86e-04  2944.4s
+step   2000  train 0.070  val 0.071  lr 1.56e-04  3002.4s
+step   2250  train 0.073  val 0.070  lr 1.26e-04  3059.7s
+step   2500  train 0.070  val 0.069  lr 9.67e-05  3117.6s
+step   2750  train 0.066  val 0.067  lr 6.97e-05  3175.5s
+step   3000  train 0.068  val 0.066  lr 4.60e-05  3233.5s
+step   3250  train 0.062  val 0.065  lr 2.65e-05  3291.1s
+step   3500  train 0.064  val 0.064  lr 1.20e-05  3348.4s
+step   3750  train 0.064  val 0.064  lr 3.01e-06  3405.8s
+step   4000  train 0.064  val 0.064  lr 1.25e-09  3463.5s
+saved checkpoints/embedded_v2.pt
+--- sample (after the engine's canonicaliser) ---
+    22 lines, exact 0, repaired 0, unmatched 22 (inventory 4536)
+Evening settled quietly over the house as Bluey stood in the bedroom.
+Bluey pulled the covers up and got thoroughly cosy in the quiet space.
+Bluey kicked off the daytime shoes and slipped into soft slippers.
+Bluey tucked the corners in snug and breathed a peaceful breath.
+The twilight breeze whispered softly through the leaves of nearby branches.
+The shadows in the garden grew long and gentle beneath the starlight.
+Chilli was having trouble untangling the big pile of dress up blankets.
+Chilli felt a bit nervous about the shadowy corner in the hallway.
+Chilli came over quickly and offered a helping hand without hesitation.
+Together they gathered the scattered pieces and sorted them by size.
+They took turns holding the edges steady so nothing slipped away.
+With teamwork and care every little detail fell smoothly into place.
+They double checked their work and gave each other an appreciative nod.
+The problem was completely solved and both puppies smiled warmly.
+Chilli snuggled close safe and content in the familiar room.
+A gentle wave of relief washed over them as they hugged goodbye.
+A peaceful silence settled over the corners of the sleepy room.
+The nighttime shadows rested calm and still against the tranquil walls.
+Nothing moved now except the moonlight creeping gently across the floor.
+Heavy eyelids fluttered shut as sleepiness took over at last.
+Slow rhythmic breathing filled the tranquil room with peace.
+Bluey and Chilli slept on drifting into wonderful puppy dreams.
+validator: reject unapproved_word line 1: word not in approved vocabulary: evening (exit 2)

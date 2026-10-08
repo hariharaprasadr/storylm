@@ -113,7 +113,8 @@ storylm/
 │   └── preview.jpg               # Full-page screenshot of the visualizer
 │
 └── docs/                         # Technical Specs & Architecture Notes
-    ├── tiny_model.md             # 1.67M model architecture & memory budget
+    ├── training.md               # End-to-end training pipeline (corpus -> pack -> train -> evaluate)
+    ├── tiny_model.md             # 1.67M model architecture, memory budget & vocabulary scaling
     ├── story_format.md           # Prompt tags & story structure specs
     ├── how_it_works.md           # Engineering deep-dive
     └── review_gaps_and_improvements.md # Model analysis & future roadmap
@@ -179,6 +180,10 @@ speedup: 4.3x
 
 ## Training from Scratch
 
+The full pipeline — where the corpus comes from, how it is packed to the device's
+exact token stream, every hyperparameter, the Modal GPU run, and how the result is
+judged — is documented in [`docs/training.md`](docs/training.md).
+
 ### Preprocess the Data
 Encode the raw story corpus into tokenized `.npz` arrays:
 ```bash
@@ -188,15 +193,37 @@ python training/prepare_data.py \
   --out data/processed/train.npz
 ```
 
-### Train Locally
-Run training with PyTorch:
+### Train
+Smoke runs are local and prove the plumbing; **real training runs on a Modal GPU**
+(`training/train_model.py` refuses more than 500 CPU steps unless `--allow-cpu` is given).
+
 ```bash
-# Smoke test (300 steps)
+# Smoke test, local, plumbing only (300 steps, ~1 min)
 python training/train_model.py --data data/processed/train.npz --steps 300
 
-# Full training run
-python training/train_model.py --data data/processed/train_big.npz --steps 6000
+# Real training run: Modal T4, volumes + upload + run + download
+make train-modal                     # DATA=/VOCAB=/NAME=/STEPS=/BATCH= override the defaults
 ```
+
+Setup for the GPU path: `.venv/bin/pip install modal`, then `cp .env.example .env.local`
+and fill in `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET`.
+
+### Check for Overfitting / Memorisation
+The validator only says a story is *allowed*; it cannot see that a story was copied out of
+the training corpus. This audit measures the four things that can: the train vs held-out
+loss gap, story-level verbatim copying against the engine's own baseline, line-inventory
+reuse, and how many distinct stories come out of one prompt.
+
+```bash
+make audit                       # small checkpoint + 2,880-story corpus (~50 s)
+python cli.py audit --checkpoint checkpoints/embedded_big.pt \
+    --corpus data/processed/train_big.jsonl --packed data/processed/train_big.npz
+```
+
+Measured on both shipped checkpoints: held-out loss equal to training loss (gap −0.000
+nats), no generated story sharing a six-line run with any training story, and 100/100
+distinct stories for repeated prompts. Details in
+[`docs/training.md`](docs/training.md) §9.
 
 ### Export Weights for the Web
 After training a new checkpoint, refresh the weights both pages use:

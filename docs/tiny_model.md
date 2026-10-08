@@ -134,6 +134,9 @@ The tokenizer needs no training (word level). The corpus comes from the engine:
 ./build/storygen --corpus data/processed/train.jsonl --variants 240   # 57,600 stories
 ```
 
+The end-to-end pipeline — corpus generation, packing, the training loop, the Modal
+GPU run, evaluation and measured results — is documented in [`training.md`](training.md).
+
 | | |
 |---|---|
 | Sequences | 57,600, all distinct |
@@ -389,3 +392,180 @@ Or on a GPU: `modal run training/modal_train.py --steps 5400 --batch 64`
 (same `train_from_packed()` core; see `training/README.md`). The GPU trains
 only - canonicalisation and validation stay on the host, where the engine
 binary lives.
+
+---
+
+## 10. Scaling the vocabulary
+
+Everything the vocabulary touches is one tensor: the tied input/output embedding
+`[vocab, 128]`. The 8 blocks, the final norm, the context and the KV cache are
+vocab-independent, so the whole question is arithmetic:
+
+```text
+Δparams   = Δvocab × d_model                     # the 30 control tokens are unchanged
+INT4 KiB  = (params / 2 + params / 64 × 2) / 1024   # 4-bit weights + one FP16 scale per 64
+KV KiB    = layers × 2 × ctx × d_model          # INT8, independent of the vocabulary
+```
+
+Computed with `StoryLM(Config(...)).param_report()` on this repository's model,
+`ctx 384` and 8 layers throughout:
+
+| Configuration | Params | Embedding share | INT4 + scales | KV INT8 | Weights + cache | fp32 checkpoint |
+|---|---:|---:|---:|---:|---:|---:|
+| **today** · 752 ids · d128 h8 ffn512 | 1,671,296 | 5.8 % | 867 KiB | 768 KiB | **1,635 KiB** | 6.7 MB |
+| 3,530 words · d128 h8 ffn512 | 2,026,880 | 22.3 % | 1,052 KiB | 768 KiB | **1,820 KiB** | 8.1 MB |
+| **4,030 words** · d128 h8 ffn512 | 2,090,880 | 24.7 % | 1,085 KiB | 768 KiB | **1,853 KiB** | 8.4 MB |
+| 4,030 words · d160 h10 ffn640 | 3,105,120 | 20.8 % | 1,611 KiB | 960 KiB | **2,571 KiB** | 12.4 MB |
+| 4,030 words · d192 h12 ffn768 | 4,315,968 | 17.9 % | 2,239 KiB | 1,152 KiB | **3,391 KiB** | 17.3 MB |
+| 7,030 words · d128 h8 ffn512 | 2,474,880 | 36.4 % | 1,284 KiB | 768 KiB | **2,052 KiB** | 9.9 MB |
+
+So a tenfold vocabulary costs **+48 % parameters and +415 KiB of INT4 weights**, and a
+4,000-word vocabulary costs **+25 % and +218 KiB**. The KV cache, the context window, the
+story length and every non-embedding tensor are untouched — the model still fits an 8 MB
+part with room to spare. What changes is where the weight mass sits: the tied table goes
+from 5.8 % of the model to 25 % (4 k) or 36 % (7 k).
+
+### What it costs per token
+
+The head is the only part of the forward pass that touches the whole vocabulary, so its
+cost grows with `vocab × d_model` (96,256 → 896,000 multiply-accumulates at 7 k). In INT4
+with FP16 scales the head's working set per token is:
+
+| Configuration | Head read / token | PSRAM-resident (~80 MB/s) | Flash-mapped (~30 MB/s) | Head share of per-token MACs |
+|---|---:|---:|---:|---:|
+| today | 50 kB | 0.6 ms · 1,640 tok/s | 1.6 ms · 615 tok/s | 5 % |
+| 4,030 words · d128 | 268 kB | 3.3 ms · 306 tok/s | 8.7 ms · 115 tok/s | 22 % |
+| 7,030 words · d128 | 467 kB | 5.7 ms · 175 tok/s | 15.2 ms · 66 tok/s | 33 % |
+
+Even flash-mapped, a 4 k vocabulary generates a 301-token story in ~2.6 s against the
+**111 s** of narration for the same story (§5): the device needs roughly 5 tokens/s to
+stay ahead of the speaker, so the head may stay in flash. If the head ever becomes the
+bottleneck, the lever is structural rather than arithmetic — the engine knows which beat
+is being written, and the runtime already matches each line against that prompt's
+inventory of 3,000–4,500 engine lines (§5), so the legal next words per step are known
+and the head can be masked to them, making its cost independent of the vocabulary size.
+
+### What scales with the words, not the model
+
+**Narration.** V1 plays pre-recorded IMA ADPCM keyed to the engine's templates; the
+`unapproved_word` rule exists because a word with no clip is unusable (§8). Today's library
+is phrase-keyed (~218 fragments, ~2–3 MB, inside the 1.5–3.5 MB audio allocation of the
+plan), but the marginal cost of a new word is one clip wherever it is recorded — at 16 kHz
+mono IMA ADPCM (8 kB/s, 0.48 MB/min) a 0.4 s word is 3.1 kB:
+
+| Word-keyed clips | 16 kHz | 8 kHz |
+|---|---:|---:|
+| 722 (today) | 2.2 MB | 1.1 MB |
+| 3,530 | 10.8 MB | 5.4 MB |
+| 4,030 | 12.3 MB | 6.1 MB |
+| 7,030 | 21.5 MB | 10.7 MB |
+
+On the 8 MB part, firmware (1.8–2.5 MB) + model (1.05 MiB at 4 k) + metadata (0.1–0.4 MB)
+leaves ~3.6–4.6 MB for voice: enough for **~2,300–2,900 clips at 8 kHz**, i.e. a 4 k
+vocabulary only if the most-used ~2.7 k words are clipped and the rest fall back to engine
+templates. A full 4 k word library (6.1 MB at 8 kHz) or any 16 kHz word-keyed library wants
+the 16 MB part.
+
+**Corpus.** The vocabulary is closed by construction, so new words must first exist in the
+beat and slot tables (§4) — the corpus, the token table and the clips all follow the
+content. Holding today's coverage (~21.7 k story tokens and ~2,315 parameters per word):
+
+| Words | Parameters per word (d128) | Corpus implied |
+|---|---:|---:|
+| 722 | 2,315 | 15.7 M tokens (today's 57,600 stories) |
+| 4,030 | 519 | ~88 M tokens (≈325,000 stories) |
+| 7,030 | 352 | ~153 M tokens (≈560,000 stories) |
+
+**Why ~4 k words is the better target.** It keeps ~4× more capacity per word than 7 k, needs
+about half the corpus and about half the audio, and still leaves the model at 1.85 MiB of
+weights + cache on the 8 MB part. In ordinary prose the most frequent few thousand words
+already cover the large majority of running text, so the 4 k → 7 k step buys a few points of
+coverage at twice the voice library and half the per-word capacity. If more breadth is
+wanted, widening the model once (d160/h10/ffn640 at 2.57 MiB, or d192/h12/ffn768 at 3.39 MiB)
+costs less than doubling the vocabulary.
+
+Reproduce any row:
+
+```python
+from storylm.model import Config, StoryLM
+for vocab in (752, 3530, 4030, 7030):
+    r = StoryLM(Config(vocab=vocab, ctx=384, layers=8, d_model=128, heads=8, ffn=512)).param_report()
+    print(f"{vocab:>5} ids  {r['total']:>10,} params  "
+          f"{r['int4_bytes']/1024:>7.0f} KiB INT4  {r['kv_int8_bytes']/1024:>6.0f} KiB KV")
+```
+
+```text
+  752 ids   1,671,296 params      867 KiB INT4     768 KiB KV
+ 3530 ids   2,026,880 params     1052 KiB INT4     768 KiB KV
+ 4030 ids   2,090,880 params     1085 KiB INT4     768 KiB KV
+ 7030 ids   2,474,880 params     1284 KiB INT4     768 KiB KV
+```
+
+---
+
+## 11. Scaled 3.5K Vocabulary & Character Arc Implementation
+
+The repository implements the 3.5K vocabulary scale described in §10: scaling the
+vocabulary from 752 tokens (722 words) to **3,589 tokens (3,530 words + 59 control tokens)**,
+with authentic narrative character arcs and expanded templates.
+
+### 11.1 Authentic Character Arcs
+
+The neutral slot system is replaced with dedicated, franchise-authentic narrative arcs:
+
+* **Bluey** (`<CHAR=BLUEY>`): Authentic imaginative family play—games like Keepy-Uppy,
+  Shadowlands, Featherwand, Hotel, and Taxi; sisterly dynamics with Bingo; playful parenting
+  from Bandit and Chilli; overcoming nighttime hallway shadows; tucking in with Floppy the bunny.
+* **Gabby's Dollhouse** (`<CHAR=GABBY>`): Dollhouse delivery Meow-Meow mail unboxings,
+  shrinkification rituals, visits to Baby Box's craft room (origami & glitter tape), Cakey's
+  kitchenette (sprinkles & warm oven treats), MerCat's spa science (fizzy glowing bubbles),
+  mischievous CatRat antics, and sleepy purrs with Pillow Cat.
+* **Numberblocks** (`<CHAR=ONE>`): Mathematical curiosity and discovery—Numberland landscapes,
+  stepping stone arrays, step squads, balancing sums, encounters with friendly giant Blockzilla,
+  geometric reflections, and counting down from ten to one as blocks line up for bed.
+* **Amelia Bedelia** (`<CHAR=AMELIA>`): Classic literal-minded comedy—dusting furniture with
+  sweet talcum powder, dressing chickens in miniature socks and coats, drawing drapes with crayons
+  on paper, pitching tents by throwing them across the lawn, and resolving bewildered household
+  moments with freshly baked homemade lemon meringue pies and warm cocoa.
+* **Junie B. Jones** (`<CHAR=JUNIE>`): Iconic first-grade voice and perspective—room nine antics,
+  best friends Lucille and that Grace, yellow school bus companion Herb, handsome teacher Mr. Scary,
+  stomach butterfly flutterings, recess mishaps over crayons or shoe buckles, heartfelt apologies,
+  and snuggling with stuffed elephant Philip Johnny Bob.
+
+### 11.2 Template Extensions: Mode, Place, and Theme
+
+The prompt specification expands while preserving the strict prompt format:
+
+* **Modes (8 total)**:
+  * Original: `BEDTIME`, `ADVENTURE`, `FUNNY`, `KINDNESS`
+  * New: `MYSTERY` (investigating evening riddles and missing clues),
+    `DISCOVERY` (uncovering nature, inventions, and mathematical patterns),
+    `CELEBRATION` (classroom and family festivals winding down),
+    `SILLY` (playful backwards games and puppy giggles).
+* **Places (30 total)**:
+  * Bluey: `BACKYARD`, `BEDROOM`, `CUBBY`, `CREEK`, `VERANDAH`, `BEACH`, `LOUNGE`
+  * Gabby: `BEDROOM`, `PLAYROOM`, `WINDOW`, `CRAFTROOM`, `KITCHENETTE`, `FAIRYGARDEN`, `MUSICROOM`
+  * Numberblocks: `PLAYROOM`, `GARDEN`, `STAIR`, `NUMBERLAND`, `TOWER`, `MEADOW`, `PATTERNPARK`
+  * Amelia Bedelia: `KITCHEN`, `GARDEN`, `LIVINGROOM`, `PANTRY`, `PARLOR`, `ORCHARD`, `PORCH`
+  * Junie B. Jones: `BEDROOM`, `HALLWAY`, `YARD`, `CLASSROOM`, `PLAYGROUND`, `SCHOOLBUS`, `CAFETERIA`
+* **Themes (9 total)**:
+  * Original: `HELP`, `SHARE`, `BRAVE`, `TRY`
+  * New: `HONESTY` (admitting accidental spills and clearing worries),
+    `CURIOSITY` (inquiring into how things work),
+    `PATIENCE` (calm waiting and taking slow breaths),
+    `FRIENDSHIP` (empathy and cheering on companions),
+    `CREATIVITY` (making art and imagining endless possibilities).
+
+### 11.3 Measured Corpus & Budget Compliance
+
+Generated via `make corpus` (`storylm/corpus_builder.py` and `training/prepare_data.py`):
+
+| Metric | Target Budget | Measured |
+|---|---|---|
+| Vocabulary size | ~3.5K words | **3,530 words** (3,589 tokens with controls) |
+| Stories in corpus | Match 55K–58K baseline | **57,960 stories** (balanced 23 variants across 2,520 prompts) |
+| Words per story | 200–250 words | **227–248 words**, median 242 |
+| Lines per story | 13–30 lines | **20–22 lines**, median 21 |
+| Words per line | ≤ 16 words | **≤ 16 words** (strictly enforced) |
+| Token sequence length | ≤ 384 tokens | **273–296 tokens**, median 289 |
+| Out-of-vocabulary rate | 0 | **0 OOV** (closed vocabulary guarantee) |

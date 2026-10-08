@@ -47,6 +47,18 @@ def cmd_test(args):
     return subprocess.run(cmd, cwd=ROOT).returncode
 
 
+def cmd_audit(args):
+    """Audit a checkpoint for overfitting / memorisation of the training corpus."""
+    cmd = [sys.executable, os.path.join(ROOT, "training/memorisation.py")]
+    if args.checkpoint:
+        cmd.extend(["--checkpoint", args.checkpoint])
+    if args.corpus:
+        cmd.extend(["--corpus", args.corpus])
+    if args.packed:
+        cmd.extend(["--packed", args.packed])
+    return subprocess.run(cmd, cwd=ROOT).returncode
+
+
 
 def cmd_web(args):
     """Serve the interactive web explainer and open in browser."""
@@ -82,11 +94,13 @@ def cmd_info(args):
             v = json.load(f)
             print(f"Vocabulary:     {len(v.get('tokens', []))} tokens")
 
-    for ckpt_name in ("checkpoints/embedded_big.pt", "checkpoints/embedded.pt"):
-        p = os.path.join(ROOT, ckpt_name)
-        if os.path.exists(p):
-            size_mb = os.path.getsize(p) / (1024 * 1024)
-            print(f"Checkpoint:     {ckpt_name} ({size_mb:.2f} MB)")
+    ckpt_dir = os.path.join(ROOT, "checkpoints")
+    for ckpt_name in sorted(os.listdir(ckpt_dir)) if os.path.isdir(ckpt_dir) else []:
+        if not ckpt_name.endswith(".pt"):
+            continue
+        p = os.path.join(ckpt_dir, ckpt_name)
+        size_mb = os.path.getsize(p) / (1024 * 1024)
+        print(f"Checkpoint:     checkpoints/{ckpt_name} ({size_mb:.2f} MB)")
 
     data_dir = os.path.join(ROOT, "data/processed")
     if os.path.exists(data_dir):
@@ -106,9 +120,9 @@ def main():
     # story
     p_story = subparsers.add_parser("story", aliases=["generate"], help="Generate a character story")
     p_story.add_argument("--world", default="bluey", help="World: bluey, gabby, one, amelia, junie")
-    p_story.add_argument("--mode", default="bedtime", help="Mode: bedtime, adventure, funny, kindness")
+    p_story.add_argument("--mode", default="bedtime", help="Mode: bedtime, adventure, funny, kindness, mystery, discovery, celebration, silly")
     p_story.add_argument("--place", default=None, help="Place inside chosen world")
-    p_story.add_argument("--theme", default="help", help="Theme: help, share, brave, try")
+    p_story.add_argument("--theme", default="help", help="Theme: help, share, brave, try, honesty, curiosity, patience, friendship, creativity")
     p_story.add_argument("--seed", type=int, default=0, help="Random seed for sampling")
     p_story.add_argument("--temperature", type=float, default=0.8, help="Sampling temperature")
     p_story.add_argument("--checkpoint", default=None, help="Path to .pt checkpoint")
@@ -118,6 +132,12 @@ def main():
     # test
     p_test = subparsers.add_parser("test", help="Verify KV-cache equivalence & latency")
     p_test.add_argument("--checkpoint", default=None)
+
+    # audit
+    p_audit = subparsers.add_parser("audit", help="Check a checkpoint for overfitting / memorisation")
+    p_audit.add_argument("--checkpoint", default=None, help="Path to .pt checkpoint")
+    p_audit.add_argument("--corpus", default=None, help="Training corpus .jsonl to compare against")
+    p_audit.add_argument("--packed", default=None, help="Packed .npz holding the loss split")
 
     # web
     p_web = subparsers.add_parser("web", help="Start local server for interactive web visualizer")
@@ -132,6 +152,8 @@ def main():
         return cmd_story(args)
     elif args.subcommand == "test":
         return cmd_test(args)
+    elif args.subcommand == "audit":
+        return cmd_audit(args)
     elif args.subcommand == "web":
         return cmd_web(args)
     elif args.subcommand == "info":

@@ -1,8 +1,9 @@
 # Production target from docs/tiny_model.md.
-# 1.67M params, 867 KiB INT4, 768 KiB KV INT8, fits in PSRAM with room to spare.
+# 2.03M params at the 3.5K table, 1055 KiB INT4, 768 KiB KV INT8 (867 KiB INT4 for the
+# original 752-id model), fits in PSRAM with room to spare.
 model:
-  vocab: 752        # data/vocab.json count (30 control + 722 words)
-  ctx: 384          # measured worst sequence is 299 tokens
+  vocab: 3589       # data/vocab.json count (59 control + 3530 words; scaled 3.5K vocabulary)
+  ctx: 384          # measured worst sequence: 296 tokens (v2 corpus), 300 (v3)
   layers: 8
   d_model: 128
   heads: 8          # head_dim 16

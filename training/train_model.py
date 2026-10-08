@@ -2,8 +2,13 @@
 """Train the compact model from scratch on the engine corpus.
 
     python training/prepare_data.py                       # corpus -> .npz
-    python training/train_model.py --steps 300            # smoke run
-    python training/train_model.py --steps 6000           # real run
+    python training/train_model.py --steps 300            # smoke run, local, plumbing only
+    make train-modal                                      # real run, Modal T4 (see below)
+
+Real training runs on a Modal GPU, never locally: a CPU step is several times
+slower, so anything beyond a smoke test belongs on the T4
+(`training/modal_train.py`, or `make train-modal`). This CLI refuses more than
+500 steps on `--device cpu` unless `--allow-cpu` is passed explicitly.
 
 `train_from_packed()` is the reusable core: the local CLI and
 `training/modal_train.py` both call it, so the GPU run and the CPU run cannot
@@ -51,7 +56,7 @@ def load_packed(path):
 
 def train_from_packed(ids_np, mask_np, vocab, ctx, *, steps, batch=16, lr=3e-4,
                       warmup=100, layers=8, d_model=128, heads=8, ffn=512,
-                      eval_every=100, seed=0, device="cpu", log=print):
+                      eval_every=100, eval_batch=32, seed=0, device="cpu", log=print):
     """Trains and returns (model, history). Deterministic for a given seed."""
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -92,8 +97,19 @@ def train_from_packed(ids_np, mask_np, vocab, ctx, *, steps, batch=16, lr=3e-4,
         if step % eval_every == 0 or step == steps:
             model.eval()
             with torch.no_grad():
-                vx = ids[val_idx].to(device)
-                _, val_loss = model(vx, targets=vx, loss_mask=mask[val_idx].to(device))
+                # Evaluate in chunks: one forward over the whole split would
+                # materialise [n_val, ctx, vocab] logits. At 57,960 rows,
+                # ctx 384 and a 3,589-id vocabulary that is 14.9 GiB.
+                total, weight = 0.0, 0.0
+                for start in range(0, len(val_idx), eval_batch):
+                    chunk = val_idx[start:start + eval_batch]
+                    vx = ids[chunk].to(device)
+                    vm = mask[chunk].to(device)
+                    _, chunk_loss = model(vx, targets=vx, loss_mask=vm)
+                    w = float(vm[:, 1:].sum())
+                    total += float(chunk_loss) * w
+                    weight += w
+                val_loss = torch.tensor(total / max(weight, 1.0))
             elapsed = time.time() - started
             entry = {"step": step, "train": loss.item(), "val": val_loss.item(),
                      "lr": sched.get_last_lr()[0], "seconds": elapsed}
@@ -127,9 +143,21 @@ def main():
     ap.add_argument("--heads", type=int, default=8)
     ap.add_argument("--ffn", type=int, default=512)
     ap.add_argument("--eval-every", type=int, default=100)
+    ap.add_argument("--eval-batch", type=int, default=32,
+                    help="rows per validation chunk (keeps the logits tensor small)")
     ap.add_argument("--device", default="cpu")
-    ap.add_argument("--checkpoint", default="artifacts/checkpoints/embedded")
+    ap.add_argument("--checkpoint", default="checkpoints/embedded")
+    ap.add_argument("--allow-cpu", action="store_true",
+                    help="override the policy: real training runs on Modal, not on CPU")
     args = ap.parse_args()
+
+    if args.device == "cpu" and args.steps > 500 and not args.allow_cpu:
+        ap.error(
+            f"refusing to train for {args.steps} steps on CPU: real runs go on a Modal GPU.\n"
+            "  real run:  make train-modal            (or: modal run training/modal_train.py)\n"
+            "  smoke run: --steps <=500               (plumbing only)\n"
+            "  override:  --allow-cpu                (if you really mean it)"
+        )
 
     ids_np, mask_np, vocab, ctx, count = load_packed(args.data)
     tokens = json.load(open(args.vocab))["tokens"]
@@ -137,7 +165,7 @@ def main():
     model, _ = train_from_packed(
         ids_np, mask_np, vocab, ctx, steps=args.steps, batch=args.batch, lr=args.lr,
         warmup=args.warmup, layers=args.layers, d_model=args.d_model, heads=args.heads,
-        ffn=args.ffn, eval_every=args.eval_every, device=args.device,
+        ffn=args.ffn, eval_every=args.eval_every, eval_batch=args.eval_batch, device=args.device,
     )
 
     os.makedirs(os.path.dirname(args.checkpoint), exist_ok=True)
@@ -153,16 +181,8 @@ def main():
     for line in lines:
         print(line)
 
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as handle:
-        handle.write("".join(f"<LINE>{line}</LINE>\n" for line in lines) + "<END>\n")
-        path = handle.name
-    result = subprocess.run(
-        ["./build/storygen", "--check", "--series", "bluey", "--mode", "bedtime",
-         "--place", "bedroom", "--theme", "help"],
-        stdin=open(path), capture_output=True, text=True,
-    )
-    print("validator:", result.stdout.strip(), f"(exit {result.returncode})")
-    os.unlink(path)
+    from storylm.validator import run_check
+    print("validator:", run_check("bluey", "bedtime", "bedroom", "help", lines, lines))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,253 @@
 [
-  {"id": "bluey", "name": "Bluey", "story_name": "Bluey", "token": "<CHAR=BLUEY>", "description": "a six-year-old blue heeler puppy", "rights": "Ludo Studio / BBC Studios (all rights reserved)", "default_mode": "bedtime", "modes": ["adventure", "bedtime", "funny", "kindness"], "friends": ["Bingo", "Muffin", "Bandit"], "places": ["backyard", "bedroom", "cubby"], "props": ["a warm blanket", "a night light", "a bedtime storybook", "a soft teddy", "a woolly quilt", "a cosy dressing gown", "a sleepy lullaby"]},
-  {"id": "gabby", "name": "Gabby", "story_name": "Gabby", "token": "<CHAR=GABBY>", "description": "a girl who lives in a dollhouse", "rights": "DreamWorks Animation (all rights reserved)", "default_mode": "bedtime", "modes": ["adventure", "bedtime", "funny", "kindness"], "friends": ["Pandy Paws", "CatRat", "MerCat"], "places": ["bedroom", "playroom", "window"], "props": ["a fluffy pillow", "a glow star", "a cosy blanket", "a music box", "a sparkly quilt", "a tiny lantern", "a tiny teapot"]},
-  {"id": "numberblocks", "name": "One", "story_name": "One", "token": "<CHAR=ONE>", "description": "a small red number block", "rights": "Alphablocks Ltd / Blue Zoo (all rights reserved)", "default_mode": "bedtime", "modes": ["adventure", "bedtime", "funny", "kindness"], "friends": ["Two", "Three", "Five"], "places": ["playroom", "garden", "stair"], "props": ["a soft blanket", "a night light", "a star chart", "a cuddly teddy", "a knitted quilt", "a fluffy pillow", "a bedtime rhyme"]},
-  {"id": "amelia", "name": "Amelia Bedelia", "story_name": "Amelia", "token": "<CHAR=AMELIA>", "description": "a housekeeper who takes every word literally", "rights": "Peggy Parish estate / HarperCollins (all rights reserved)", "default_mode": "bedtime", "modes": ["adventure", "bedtime", "funny", "kindness"], "friends": ["Mr. Rogers", "Mrs. Rogers"], "places": ["kitchen", "garden", "livingroom"], "props": ["a warm blanket", "a hot water bottle", "a bedtime book", "a night light", "a patchwork quilt", "a lavender cushion", "a mug of cocoa"]},
-  {"id": "junie", "name": "Junie B. Jones", "story_name": "Junie", "token": "<CHAR=JUNIE>", "description": "a girl in her first year of school", "rights": "Barbara Park estate / Random House (all rights reserved)", "default_mode": "bedtime", "modes": ["adventure", "bedtime", "funny", "kindness"], "friends": ["Lucille", "Grace", "Herb"], "places": ["bedroom", "hallway", "yard"], "props": ["a teddy bear", "a night light", "a bedtime book", "a fluffy blanket", "a stripy quilt", "a woolly jumper", "a bedtime rhyme"]}
+  {
+    "id": "bluey",
+    "name": "Bluey",
+    "story_name": "Bluey",
+    "token": "<CHAR=BLUEY>",
+    "description": "a six-year-old blue heeler puppy who loves imaginative family play",
+    "rights": "Ludo Studio / BBC Studios (all rights reserved)",
+    "default_mode": "bedtime",
+    "modes": [
+      "bedtime",
+      "adventure",
+      "funny",
+      "kindness",
+      "mystery",
+      "discovery",
+      "celebration",
+      "silly"
+    ],
+    "friends": [
+      "Bingo",
+      "Bandit",
+      "Chilli",
+      "Muffin",
+      "Rusty",
+      "Mackenzie"
+    ],
+    "places": [
+      "backyard",
+      "bedroom",
+      "cubby",
+      "creek",
+      "verandah",
+      "beach",
+      "lounge"
+    ],
+    "props": [
+      "a warm blanket",
+      "a night light",
+      "a bedtime storybook",
+      "a soft teddy",
+      "a woolly quilt",
+      "a cosy dressing gown",
+      "a sleepy lullaby",
+      "a red balloon",
+      "a magic featherwand",
+      "floppy the bunny",
+      "a bush stick",
+      "a striped beach towel"
+    ]
+  },
+  {
+    "id": "gabby",
+    "name": "Gabby",
+    "story_name": "Gabby",
+    "token": "<CHAR=GABBY>",
+    "description": "a girl who shrinks down with magical cat ears to explore her dollhouse",
+    "rights": "DreamWorks Animation (all rights reserved)",
+    "default_mode": "bedtime",
+    "modes": [
+      "bedtime",
+      "adventure",
+      "funny",
+      "kindness",
+      "mystery",
+      "discovery",
+      "celebration",
+      "silly"
+    ],
+    "friends": [
+      "Pandy Paws",
+      "Cakey",
+      "CatRat",
+      "MerCat",
+      "Pillow Cat",
+      "Baby Box"
+    ],
+    "places": [
+      "bedroom",
+      "playroom",
+      "window",
+      "craftroom",
+      "kitchenette",
+      "fairygarden",
+      "musicroom"
+    ],
+    "props": [
+      "a fluffy pillow",
+      "a glow star",
+      "a cosy blanket",
+      "a music box",
+      "a sparkly quilt",
+      "a tiny lantern",
+      "a tiny teapot",
+      "a sprinkle shaker",
+      "a glitter ribbon",
+      "a magical delivery box",
+      "a bubble bottle",
+      "a storybook"
+    ]
+  },
+  {
+    "id": "numberblocks",
+    "name": "One",
+    "story_name": "One",
+    "token": "<CHAR=ONE>",
+    "description": "a curious little red number block discovering mathematics and friendship",
+    "rights": "Alphablocks Ltd / Blue Zoo (all rights reserved)",
+    "default_mode": "bedtime",
+    "modes": [
+      "bedtime",
+      "adventure",
+      "funny",
+      "kindness",
+      "mystery",
+      "discovery",
+      "celebration",
+      "silly"
+    ],
+    "friends": [
+      "Two",
+      "Three",
+      "Four",
+      "Five",
+      "Six",
+      "Seven",
+      "Eight",
+      "Nine",
+      "Ten"
+    ],
+    "places": [
+      "playroom",
+      "garden",
+      "stair",
+      "numberland",
+      "tower",
+      "meadow",
+      "patternpark"
+    ],
+    "props": [
+      "a soft blanket",
+      "a night light",
+      "a star chart",
+      "a cuddly teddy",
+      "a knitted quilt",
+      "a fluffy pillow",
+      "a bedtime rhyme",
+      "a magic mirror",
+      "a stepping block",
+      "a balance beam",
+      "a geometric cube",
+      "a shiny number badge"
+    ]
+  },
+  {
+    "id": "amelia",
+    "name": "Amelia Bedelia",
+    "story_name": "Amelia",
+    "token": "<CHAR=AMELIA>",
+    "description": "an earnest housekeeper who takes every idiom literally, then bakes sweet pies",
+    "rights": "Peggy Parish estate / HarperCollins (all rights reserved)",
+    "default_mode": "bedtime",
+    "modes": [
+      "bedtime",
+      "adventure",
+      "funny",
+      "kindness",
+      "mystery",
+      "discovery",
+      "celebration",
+      "silly"
+    ],
+    "friends": [
+      "Mr. Rogers",
+      "Mrs. Rogers",
+      "Alcolu",
+      "Mrs. Wragge"
+    ],
+    "places": [
+      "kitchen",
+      "garden",
+      "livingroom",
+      "pantry",
+      "parlor",
+      "orchard",
+      "porch"
+    ],
+    "props": [
+      "a warm blanket",
+      "a hot water bottle",
+      "a bedtime book",
+      "a night light",
+      "a patchwork quilt",
+      "a lavender cushion",
+      "a mug of cocoa",
+      "a fresh lemon pie",
+      "a feather duster",
+      "a tin of dusting powder",
+      "a wooden rolling pin",
+      "a calico apron"
+    ]
+  },
+  {
+    "id": "junie",
+    "name": "Junie B. Jones",
+    "story_name": "Junie",
+    "token": "<CHAR=JUNIE>",
+    "description": "an outspoken first-grader who navigates school adventures with dramatic charm",
+    "rights": "Barbara Park estate / Random House (all rights reserved)",
+    "default_mode": "bedtime",
+    "modes": [
+      "bedtime",
+      "adventure",
+      "funny",
+      "kindness",
+      "mystery",
+      "discovery",
+      "celebration",
+      "silly"
+    ],
+    "friends": [
+      "Lucille",
+      "Grace",
+      "Herb",
+      "Mrs.",
+      "Ollie",
+      "Mr. Scary"
+    ],
+    "places": [
+      "bedroom",
+      "hallway",
+      "yard",
+      "classroom",
+      "playground",
+      "schoolbus",
+      "cafeteria"
+    ],
+    "props": [
+      "a teddy bear",
+      "a night light",
+      "a bedtime book",
+      "a fluffy blanket",
+      "a stripy quilt",
+      "a woolly jumper",
+      "a bedtime rhyme",
+      "philip johnny bob",
+      "a purple crayon",
+      "a shiny shoe",
+      "a funny pair of glasses",
+      "a pink pencil"
+    ]
+  }
 ]

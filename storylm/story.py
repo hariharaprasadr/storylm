@@ -36,12 +36,13 @@ except ImportError:
     canonicalize = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_CHECKPOINTS = ["checkpoints/embedded_big.pt",
+DEFAULT_CHECKPOINTS = ["checkpoints/embedded_v2.pt",
                        "checkpoints/embedded.pt",
+                       "checkpoints/embedded_big.pt",
                        "artifacts/checkpoints/embedded_big.pt",
                        "artifacts/checkpoints/embedded.pt"]
-MODES = ["bedtime", "adventure", "funny", "kindness"]
-THEMES = ["help", "share", "brave", "try"]
+MODES = ["bedtime", "adventure", "funny", "kindness", "mystery", "discovery", "celebration", "silly"]
+THEMES = ["help", "share", "brave", "try", "honesty", "curiosity", "patience", "friendship", "creativity"]
 
 
 def load_series():
@@ -159,14 +160,9 @@ def main():
         print(line)
     print(f"\n{len(lines)} lines, {sum(len(l.split()) for l in lines)} words | {note}")
 
-    if not args.raw and os.path.exists(os.path.join(ROOT, "build/storygen")):
-        payload = "".join(f"<LINE>{line}</LINE>\n" for line in lines) + "<END>\n"
-        verdict = subprocess.run(
-            ["./build/storygen", "--check", "--series", world, "--mode", mode,
-             "--place", place, "--theme", theme],
-            input=payload, capture_output=True, text=True, cwd=ROOT,
-        )
-        print("validator:", verdict.stdout.strip())
+    if not args.raw:
+        from storylm.validator import run_check
+        print("validator:", run_check(world, mode, place, theme, lines, lines))
         if "unmatched 0" not in note:
             print("note: unmatched lines are drift, or a beat written for another "
                   f"theme (this story asked for {theme})", file=sys.stderr)

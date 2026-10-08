@@ -50,25 +50,17 @@ def canonicalize(lines, series_id, place_id, theme, mode="bedtime"):
     The inventory must be built for the *same prompt* the story came from: a
     story generated for one mode does not contain another mode's opening or
     closing, so passing the wrong mode makes those lines unmatched.
+
+    Uses the C++ engine when it is built on the current token table, and the
+    Python validator (`storylm/validator.py`) otherwise.
     """
-    payload = "".join(f"<LINE>{line}</LINE>\n" for line in lines) + "<END>\n"
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as handle:
-        handle.write(payload)
-        path = handle.name
-    result = subprocess.run(
-        ["./build/storygen", "--canonicalize", "--series", series_id, "--mode", mode,
-         "--place", place_id, "--theme", theme],
-        stdin=open(path), capture_output=True, text=True,
-    )
-    os.unlink(path)
-    out = [line[line.index("<LINE>") + len("<LINE>"):line.index("</LINE>")]
-           for line in result.stdout.splitlines() if line.startswith("<LINE>")]
-    return out or lines, result.stderr.strip().split(": ", 1)[-1]
+    from storylm.validator import run_canonicalize
+    return run_canonicalize(series_id, mode, place_id, theme, lines)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", default="artifacts/checkpoints/embedded.pt")
+    ap.add_argument("--checkpoint", default="checkpoints/embedded.pt")
     ap.add_argument("--vocab", default="data/vocab.json")
     ap.add_argument("--per-world", type=int, default=1)
     ap.add_argument("--repeats", type=int, default=1,
@@ -119,17 +111,11 @@ def main():
                 total_lines += len(lines)
                 unmatched_lines += unmatched
 
-                payload = "".join(f"<LINE>{line}</LINE>\n" for line in lines) + "<END>\n"
-                with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as handle:
-                    handle.write(payload)
-                    path = handle.name
-                verdict = subprocess.run(
-                    ["./build/storygen", "--check", "--series", SERIES_IDS[world], "--mode", "bedtime",
-                     "--place", PLACE_IDS[world], "--theme", theme.lower()],
-                    stdin=open(path), capture_output=True, text=True,
-                )
-                os.unlink(path)
-                passed += verdict.returncode == 0
+                from storylm.validator import run_check
+                verdict_text = run_check(SERIES_IDS[world], "bedtime", PLACE_IDS[world],
+                                         theme.lower(), lines, lines)
+                verdict_ok = verdict_text.startswith("ok")
+                passed += verdict_ok
 
                 print(f"=== {prompt}  ({len(lines)} lines, "
                       f"{sum(len(line.split()) for line in lines)} words)")
@@ -137,7 +123,7 @@ def main():
                     print("   ", line)
                 print(f"    corpus-exact: {matched}/{len(lines)} lines"
                       f"    canonicalize: {stats}"
-                      f"    validator: {verdict.stdout.strip()} (exit {verdict.returncode})")
+                      f"    validator: {verdict_text}")
 
     print(f"\n{passed}/{total} stories passed the firmware validator")
     print(f"{matched_lines}/{total_lines} lines match an engine line word for word "
