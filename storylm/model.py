@@ -111,7 +111,7 @@ class KVBuf:
         return 2 * self.cfg.layers * self.batch * self.cfg.heads * self.cfg.ctx * self.cfg.head_dim * 4
 
 
-class TinyLM(nn.Module):
+class StoryLM(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg

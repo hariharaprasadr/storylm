@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Export the full TinyLM weights + prompt metadata so the web page can run
+"""Export the full StoryLM weights + prompt metadata so the web page can run
 story generation live in the browser (no server, file:// safe).
 
-Output: ``window.STORY = {...}`` in web/story_data.js, mirroring
-``window.TRACE`` from export_trace.py. Weights are stored as base64 of
-little-endian float16, decoded by web/story.js at page load (~3.4 MB).
+Output: ``window.STORY = {...}`` in web/story_data.js. Weights are stored
+as base64 of little-endian float16, decoded by web/story.js at page load
+(~3.4 MB). This file is the single source of truth for the whole site:
+Story Studio generates from it, and web/wt-trace.js computes every number
+the walkthrough shows straight from these weights.
 """
 from __future__ import annotations
 
@@ -12,13 +14,16 @@ import argparse
 import base64
 import json
 import os
+import sys
 
 import numpy as np
 import torch
 
-from tinylm.model import Config, TinyLM
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from storylm.model import Config, StoryLM
 
 MODES = ["adventure", "bedtime", "funny", "kindness"]
 THEMES = ["help", "share", "brave", "try"]
@@ -37,7 +42,7 @@ def main():
 
     ckpt = torch.load(args.checkpoint, weights_only=False, map_location="cpu")
     cfg = Config(**ckpt["config"])
-    model = TinyLM(cfg)
+    model = StoryLM(cfg)
     model.load_state_dict(ckpt["model"])
     print(f"loaded {args.checkpoint}: {sum(p.numel() for p in model.parameters()):,} params")
 

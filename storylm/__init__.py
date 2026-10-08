@@ -1,9 +1,9 @@
-"""TinyLM: 1.67M parameter Tiny Language Model for edge & embedded devices."""
+"""StoryLM: 1.67M parameter Tiny Language Model for edge & embedded devices."""
 
 from .model import (
-    Config as TinyLMConfig,
+    Config as StoryLMConfig,
     Config,
-    TinyLM,
+    StoryLM,
     Attention,
     Block,
     Block as TransformerBlock,
@@ -18,9 +18,9 @@ from .model import (
 
 __version__ = "0.1.0"
 __all__ = [
-    "TinyLMConfig",
+    "StoryLMConfig",
     "Config",
-    "TinyLM",
+    "StoryLM",
     "Attention",
     "Block",
     "TransformerBlock",

@@ -24,12 +24,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import torch
 
 try:
-    from .model import Config, TinyLM, decode_lines, generate_story
+    from .model import Config, StoryLM, decode_lines, generate_story
 except (ImportError, ValueError):
     try:
-        from tinylm.model import Config, TinyLM, decode_lines, generate_story
+        from storylm.model import Config, StoryLM, decode_lines, generate_story
     except ImportError:
-        from model import Config, TinyLM, decode_lines, generate_story
+        from model import Config, StoryLM, decode_lines, generate_story
 try:
     from sample import canonicalize
 except ImportError:
@@ -132,7 +132,7 @@ def main():
 
     torch.manual_seed(args.seed)
     ckpt = torch.load(checkpoint, weights_only=False)
-    model = TinyLM(Config(**ckpt["config"]))
+    model = StoryLM(Config(**ckpt["config"]))
     model.load_state_dict(ckpt["model"])
     model.eval()
 

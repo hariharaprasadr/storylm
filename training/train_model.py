@@ -31,9 +31,9 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from tinylm.model import Config, TinyLM, decode_lines, generate_story
+    from storylm.model import Config, StoryLM, decode_lines, generate_story
 except ImportError:
-    from model import Config, TinyLM, decode_lines, generate_story
+    from model import Config, StoryLM, decode_lines, generate_story
 
 try:
     from sample import canonicalize
@@ -57,7 +57,7 @@ def train_from_packed(ids_np, mask_np, vocab, ctx, *, steps, batch=16, lr=3e-4,
     np.random.seed(seed)
 
     cfg = Config(vocab=vocab, ctx=ctx, layers=layers, d_model=d_model, heads=heads, ffn=ffn)
-    model = TinyLM(cfg).to(device)
+    model = StoryLM(cfg).to(device)
     report = model.param_report()
     log(f"vocab {report['vocab']} | total params {report['total']:,} "
         f"| INT4 {report['int4_bytes'] / 1024:.0f} KiB "

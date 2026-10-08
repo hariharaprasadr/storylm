@@ -24,12 +24,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import torch
 
 try:
-    from .model import Config, KVBuf, TinyLM, generate_story
+    from .model import Config, KVBuf, StoryLM, generate_story
 except (ImportError, ValueError):
     try:
-        from tinylm.model import Config, KVBuf, TinyLM, generate_story
+        from storylm.model import Config, KVBuf, StoryLM, generate_story
     except ImportError:
-        from model import Config, KVBuf, TinyLM, generate_story
+        from model import Config, KVBuf, StoryLM, generate_story
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROMPT = ["<CHAR=BLUEY>", "<MODE=BEDTIME>", "<PLACE=BEDROOM>", "<THEME=HELP>"]
@@ -37,7 +37,7 @@ PROMPT = ["<CHAR=BLUEY>", "<MODE=BEDTIME>", "<PLACE=BEDROOM>", "<THEME=HELP>"]
 
 def load(checkpoint, vocab):
     ckpt = torch.load(checkpoint, weights_only=False)
-    model = TinyLM(Config(**ckpt["config"]))
+    model = StoryLM(Config(**ckpt["config"]))
     model.load_state_dict(ckpt["model"])
     model.eval()
     tokens = json.load(open(vocab))["tokens"]

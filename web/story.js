@@ -1,4 +1,4 @@
-// Live in-browser story generation: a vanilla-JS port of tinylm/model.py
+// Live in-browser story generation: a vanilla-JS port of storylm/model.py
 // running on the real fp16 weights from web/story_data.js (window.STORY).
 // No server, no library — the same forward pass the device runtime will run.
 (() => {
@@ -169,7 +169,7 @@
   const endId = vocab.indexOf("<END>");
   const eosId = vocab.indexOf("<EOS>");
 
-  function sample(logits) {
+  function sample(logits, rand = Math.random) {
     const scaled = new Float32Array(V);
     for (let i = 0; i < V; i++) scaled[i] = logits[i] / Math.max(P.temperature, 1e-6);
     scaled[eosId] = -Infinity;
@@ -184,7 +184,7 @@
       probs[i] = scaled[i] >= kth ? Math.exp(scaled[i] - mx) : 0;
       sum += probs[i];
     }
-    const r = Math.random() * sum;
+    const r = rand() * sum;
     let acc = 0;
     for (let i = 0; i < V; i++) {
       acc += probs[i];
@@ -276,6 +276,7 @@
         [...sel.children].forEach((c) => c.classList.remove("is-on"));
         b.classList.add("is-on");
         if (isWorld) refreshPlaces();
+        syncWalkthroughLinks();
       });
       sel.append(b);
     });
@@ -289,11 +290,23 @@
     chipGroup(placeSel, w.places);
   }
 
+  // Keep every "walkthrough" link carrying the chips selected right now,
+  // so the walkthrough traces the same sample the studio would generate.
+  function syncWalkthroughLinks() {
+    const w = currentWorld();
+    const mode = modeSel.querySelector(".is-on")?.textContent ?? "bedtime";
+    const place = placeSel.querySelector(".is-on")?.textContent ?? w.places[0];
+    const theme = themeSel.querySelector(".is-on")?.textContent ?? "help";
+    const q = `?world=${encodeURIComponent(w.id)}&mode=${encodeURIComponent(mode)}` +
+      `&place=${encodeURIComponent(place)}&theme=${encodeURIComponent(theme)}`;
+    document.querySelectorAll('a[href="walkthrough.html"], a[href^="walkthrough.html?"]')
+      .forEach((a) => { a.href = "walkthrough.html" + q; });
+  }
   chipGroup(worldSel, S.worlds.map((w) => w.name), true);
   chipGroup(modeSel, MODES, false, "bedtime");
   chipGroup(themeSel, S.themes, false, "help");
   refreshPlaces();
-
+  syncWalkthroughLinks();
   let busy = false;
   btn.addEventListener("click", async () => {
     if (busy) return;
@@ -346,6 +359,9 @@
   });
   }
 
-  // Exposed for headless testing / debugging.
-  window.StoryEngine = { decodeAll, generate, renderLines, vocab, config: cfg };
+  // Exposed for headless testing / debugging and the web walkthrough (wt-trace.js).
+  window.StoryEngine = {
+    decodeAll, generate, renderLines, sample, vocab, config: cfg, sampling: P,
+    weights: W, rmsnorm, matvec, gelu, step, newCache, rope: { cos: cosT, sin: sinT },
+  };
 })();

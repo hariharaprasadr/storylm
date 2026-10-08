@@ -1,4 +1,4 @@
-# TinyLM: 1.67M Parameter Tiny Language Model
+# StoryLM: 1.67M Parameter Tiny Language Model
 
 An edge-native, ultra-compact generative language model engineered for resource-constrained microcontrollers and embedded devices (such as the ESP32-S3), accompanied by a mathematical forward-pass tracer and an interactive web visualizer.
 
@@ -42,7 +42,7 @@ then the expanded 57,600-story corpus on a rented T4 GPU for the big one.
 Evaluation was never perplexity — sampled stories go back through the engine's
 canonicaliser and the firmware validator, the same gate the device will use.
 
-**That model is TinyLM.** Somewhere along the way the interesting artifact
+**That model is StoryLM.** Somewhere along the way the interesting artifact
 stopped being the appliance and became the model: a complete language model —
 tokenizer, training loop, checkpoints, a KV cache proven token-identical to
 full recompute (4.3x faster), a forward-pass tracer and a 30-step browser
@@ -50,7 +50,7 @@ walkthrough — that fits in 867 KiB of INT4 flash. This repo holds it.
 
 ## Key Specifications
 
-| Engineering Metric | TinyLM (Tiny SLM) | Standard Local LLM | Frontier Cloud LLM |
+| Engineering Metric | StoryLM (Tiny SLM) | Standard Local LLM | Frontier Cloud LLM |
 | :--- | :--- | :--- | :--- |
 | **Parameter Count** | **1,671,296 (1.67M)** | 7,000,000,000 (7B) | ~1,800,000,000,000 (1.8T) |
 | **Layers / Dim / Heads** | **8 layers / d=128 / 8 heads** | 32 layers / d=4096 / 32 heads | 96+ layers / d=12288+ |
@@ -65,16 +65,16 @@ walkthrough — that fits in 867 KiB of INT4 flash. This repo holds it.
 ## Repository Structure
 
 ```
-tinylm/
+storylm/
 ├── README.md                     # Project documentation & quickstart
 ├── cli.py                        # Unified command-line interface
 ├── requirements.txt              # Python dependencies (torch, numpy, pyyaml)
 ├── pyproject.toml                # Standard python packaging
-├── Makefile                      # Convenient CLI targets (test, story, web, trace)
+├── Makefile                      # Convenient CLI targets (story, test, web, info, train)
 │
-├── tinylm/                       # Core Model Library
+├── storylm/                      # Core Model Library
 │   ├── __init__.py               # Package exports
-│   ├── model.py                  # TinyLM architecture, RoPE, Attention, KV-Cache
+│   ├── model.py                  # StoryLM architecture, RoPE, Attention, KV-Cache
 │   ├── story.py                  # Standalone prompt & story generation engine
 │   └── test_cache.py             # KV-cache equivalence & speed benchmark
 │
@@ -97,17 +97,19 @@ tinylm/
 ├── training/                     # Training & Tracing Pipelines
 │   ├── train_model.py            # Local PyTorch training loop (AdamW, Cosine LR)
 │   ├── prepare_data.py           # Corpus tokenization & .npz dataset packing
-│   ├── export_trace.py           # Mathematical forward pass tracer -> web/trace_data.js
 │   ├── export_story.py           # Full fp16 weights + prompts -> web/story_data.js
 │   ├── modal_train.py            # Scalable Cloud GPU training script (Modal)
 │   └── sample.py                 # Evaluation & sampling harness
 │
 ├── web/                          # Standalone Interactive Web Visualizer
-│   ├── index.html                # Storybook design: Story Studio, Architecture, Walkthrough
+│   ├── index.html                # Main page: Story Studio, Architecture, Comparison
+│   ├── walkthrough.html          # 30-step forward-pass walkthrough (linked from the main page)
+│   ├── styles.css                # Shared page styles
+│   ├── walkthrough.css           # Walkthrough-specific styles
 │   ├── story.js                  # Vanilla-JS port of the model: live in-browser generation
 │   ├── story_data.js             # Real checkpoint weights, fp16 + base64 (~4.3 MB)
-│   ├── walkthrough.js            # 30-step forward pass interactive player
-│   ├── trace_data.js             # Forward pass trace for the walkthrough (190 KB)
+│   ├── walkthrough.js            # 30-step numeric walkthrough UI (real values, real arithmetic)
+│   ├── wt-trace.js               # Traces the forward pass live from the weights at page load
 │   └── preview.jpg               # Full-page screenshot of the visualizer
 │
 └── docs/                         # Technical Specs & Architecture Notes
@@ -141,7 +143,8 @@ python cli.py story --list
 ```
 
 ### 3. Launch the Interactive Web Explainer
-Explore the inner workings of the model in your browser:
+Explore the inner workings of the model in your browser — live at
+[storylm.vercel.app](https://storylm.vercel.app/):
 ```bash
 python cli.py web
 ```
@@ -149,13 +152,14 @@ This serves `web/index.html`, which features:
 - **Story Studio — Live In-Browser Generation**: the page ships the real checkpoint weights (fp16, ~4.3 MB) and a vanilla-JS port of the model with a KV cache; pick character, mode, place and theme, and a brand-new story is generated live in the browser (~80-100 tok/s, no server).
 - **Interactive Dataflow Diagram**: View tensor shapes through Embeddings, 8x Transformer Layers, and Output Head.
 - **Component Breakdown**: Deep dives into RMSNorm, RoPE, Preallocated KV-Cache, and GELU FFN.
-- **"Under the Hood" Walkthrough**: A 30-step slowed-down execution of a real forward pass:
-  - Inspect 1,671,296 model weights and matrix histograms.
-  - Track residual stream vectors across all 8 layers.
-  - Observe multi-head attention weights and FFN feature activations.
-  - Peek via the "logit lens" to see what the model would guess at intermediate layers.
-  - Examine greedy next-token probability distributions and autoregressive loops.
-- **TinyLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
+- **"Under the Hood" Walkthrough** (on `walkthrough.html`, linked from the main page): a 30-step slowed-down execution of a real forward pass — computed live in the browser from the same fp16 weights Story Studio runs, following the chips you selected there (the walkthrough links carry the selection; bare URLs use the defaults), and showing the actual numbers and arithmetic instead of pre-baked graphics:
+  - Walk the real matrices cell by cell — and click any matrix to pop it out: the full tensor opens in a scroll-through explorer (wheel/arrow keys pan rows, shift+wheel or drag pans columns).
+  - See the extra axes in 3D: any layer weight window stacked across all 8 layers, and the attention tensor as 8 head planes (drag to rotate; the plane picker brings any head to the front — nothing stays hidden at the back).
+  - Follow the residual stream as a stages × 128-dim matrix, with the real q·k dot products, √d scores and softmax weights per head.
+  - Watch FFN feature detectors switch on, with the real up/GELU/down arithmetic and a movement table that adds up.
+  - Peek via the "logit lens" at what the model would guess after every layer.
+  - Map all 752 output logits back onto the vocabulary — one cell per word, shaded by its actual score — then roll the seeded sampling dice and read the first line it writes.
+- **StoryLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
 
 ### 4. Verify KV-Cache Parity & Performance
 Verify that KV-cache output is numerically identical to standard full-context recomputation:
@@ -194,12 +198,14 @@ python training/train_model.py --data data/processed/train.npz --steps 300
 python training/train_model.py --data data/processed/train_big.npz --steps 6000
 ```
 
-### Export Forward Pass Trace
-To update the web visualizer's execution data after training a new checkpoint:
+### Export Weights for the Web
+After training a new checkpoint, refresh the weights both pages use:
 ```bash
-python cli.py trace
+python cli.py story --raw   # smoke-check sampling from the new checkpoint
+python training/export_story.py
 ```
-This updates `web/trace_data.js` with the real intermediate activations.
+`web/story_data.js` is the single source of truth: Story Studio generates from it and the
+walkthrough computes every displayed number from it in the browser.
 
 ---
 

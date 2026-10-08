@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tinylm"
+name = "storylm"
 version = "0.1.0"
-description = "TinyLM: 1.67M parameter Tiny Language Model with KV-Cache for embedded edge devices"
+description = "StoryLM: 1.67M parameter Tiny Language Model with KV-Cache for embedded edge devices"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -15,4 +15,4 @@ dependencies = [
 ]
 
 [project.scripts]
-tinylm = "cli:main"
+storylm = "cli:main"

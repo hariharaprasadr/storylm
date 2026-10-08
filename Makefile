@@ -1,13 +1,12 @@
-.PHONY: help story test web trace info train clean
+.PHONY: help story test web info train clean
 
 help:
-	@echo "TinyLM 1.67M Tiny Language Model"
+	@echo "StoryLM 1.67M Tiny Language Model"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make story   - Generate a bedtime story from checkpoints/embedded_big.pt"
 	@echo "  make test    - Run KV-cache parity and performance test"
 	@echo "  make web     - Launch the interactive architecture & walkthrough visualizer"
-	@echo "  make trace   - Regenerate web/trace_data.js forward pass trace"
 	@echo "  make info    - Print model checkpoint and dataset overview"
 	@echo "  make train   - Run a 300-step smoke training run"
 	@echo "  make clean   - Clean cache files"
@@ -20,9 +19,6 @@ test:
 
 web:
 	python cli.py web
-
-trace:
-	python cli.py trace
 
 info:
 	python cli.py info

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoryLM — Under the hood: the forward-pass walkthrough</title>
+  <meta name="description" content="A 30-step interactive walkthrough of one real forward pass of StoryLM: the trained model weights, the starting prompt, how tokens travel through all 8 layers, and how the next token is chosen.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="walkthrough.css">
+  <!-- Vercel Web Analytics -->
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+
+  <header class="site-nav">
+    <div class="container nav-inner">
+      <a class="wordmark" href="index.html">Story<em>LM</em></a>
+      <ul class="nav-links">
+        <li><a href="index.html#story">Story Studio</a></li>
+        <li><a href="index.html#origin">Origin</a></li>
+        <li><a href="index.html#architecture">Architecture</a></li>
+        <li><a href="index.html#components">Components</a></li>
+        <li><a href="#walkthrough" aria-current="page">Walkthrough</a></li>
+        <li><a href="index.html#comparison">Comparison</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- WALKTHROUGH (interactive, driven by walkthrough.js) -->
+    <section id="walkthrough">
+      <div class="container">
+        <div class="section-head">
+          <div class="section-eyebrow">Interactive step-by-step execution</div>
+          <h2 class="section-title">Under the hood: from prompt to next token</h2>
+          <p class="section-desc">
+            Slowed down so anyone can follow: inspect the real trained model weights, the starting prompt,
+            how tokens travel through all 8 layers, and how the next token is chosen.
+          </p>
+        </div>
+
+        <div class="wt-card">
+          <!-- Top Chapter Rail -->
+          <div class="wt-rail-wrapper">
+            <span class="wt-rail-label">Jump to stage:</span>
+            <div id="wt-rail" class="wt-rail"></div>
+          </div>
+
+          <!-- Playback & Controls Bar -->
+          <div class="wt-controls-bar">
+            <div class="wt-btn-group">
+              <button id="wt-prev" class="wt-ctrl-btn" type="button" aria-label="Previous step">&larr; Prev</button>
+              <button id="wt-play" class="wt-ctrl-btn wt-play-btn" type="button" aria-pressed="false">&#9654; Play</button>
+              <button id="wt-next" class="wt-ctrl-btn" type="button" aria-label="Next step">Next &rarr;</button>
+            </div>
+
+            <div class="wt-speed-wrap">
+              <label for="wt-speed">Speed:</label>
+              <select id="wt-speed">
+                <option value="4000">Slow (4.0s)</option>
+                <option value="2500" selected>Normal (2.5s)</option>
+                <option value="1500">Fast (1.5s)</option>
+              </select>
+            </div>
+
+            <div class="wt-progress-wrap">
+              <span id="wt-count" class="wt-count-text">1 / 30</span>
+              <div class="wt-progress-track">
+                <div id="wt-progress" class="wt-progress-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout Grid (Map on left, Step View on right) -->
+          <div class="wt-layout-grid">
+            <aside class="wt-sidebar-map">
+              <div class="wt-map-heading">
+                <span>Residual Stream</span>
+                <span class="wt-map-sub">The predicting vector &bull; stage by stage</span>
+              </div>
+              <div id="wt-map" class="wt-map"></div>
+              <div class="wt-map-note">
+                Each <code>‖x‖</code> is the length of the vector that will predict the next token,
+                after that stage finished adding to it. <code>Δ</code> is the change the stage made.
+                The highlighted column is the active stage.
+              </div>
+            </aside>
+
+            <div class="wt-main-panel" id="wt-panel">
+              <div class="wt-header-block">
+                <div class="wt-header-main">
+                  <div id="wt-kicker" class="wt-kicker-tag">Step 0 &bull; Model Weights</div>
+                  <h3 id="wt-title" class="wt-step-title">The Model's Memory: 1,671,296 Numbers</h3>
+                </div>
+                <div class="wt-header-rest">
+                  <p id="wt-plain" class="wt-plain-text">
+                    Before any story is written, the model is just a big pile of numbers called weights...
+                  </p>
+                  <div id="wt-numbers" class="wt-numbers-box">
+                    Loading the real fp16 weights and computing the forward pass…
+                  </div>
+                </div>
+              </div>
+              <div id="wt-visual" class="wt-visual-workspace"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="container">
+      <p class="footer-title">Decoder-only 1.67M Transformer</p>
+      <p class="footer-line">Tied Embeddings &bull; RoPE &bull; RMSNorm &bull; GELU &bull; 752-token closed vocabulary &bull; INT4 quantized</p>
+      <p class="footer-line">
+        <a href="https://github.com/hariharaprasadr/storylm">github.com/hariharaprasadr/storylm</a>
+        &nbsp;&middot;&nbsp; <a href="index.html">Back to the main page</a> for live inference in your browser
+      </p>
+    </div>
+  </footer>
+
+  <script src="story_data.js"></script>
+  <script src="story.js"></script>
+  <script src="wt-trace.js"></script>
+  <script src="wt-matrix.js"></script>
+  <script src="walkthrough.js"></script>
+</body>
+</html>

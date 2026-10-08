@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TinyLM Unified CLI: Generate stories, test KV-cache, serve the web visualizer, or inspect the model."""
+"""StoryLM Unified CLI: Generate stories, test KV-cache, serve the web visualizer, or inspect the model."""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +17,7 @@ sys.path.insert(0, ROOT)
 
 def cmd_story(args):
     """Run interactive story generation."""
-    cmd = [sys.executable, os.path.join(ROOT, "tinylm/story.py")]
+    cmd = [sys.executable, os.path.join(ROOT, "storylm/story.py")]
     if args.world:
         cmd.extend(["--world", args.world])
     if args.mode:
@@ -41,18 +41,11 @@ def cmd_story(args):
 
 def cmd_test(args):
     """Run KV-cache equivalence and speed benchmark test."""
-    cmd = [sys.executable, os.path.join(ROOT, "tinylm/test_cache.py")]
+    cmd = [sys.executable, os.path.join(ROOT, "storylm/test_cache.py")]
     if args.checkpoint:
         cmd.extend(["--checkpoint", args.checkpoint])
     return subprocess.run(cmd, cwd=ROOT).returncode
 
-
-def cmd_trace(args):
-    """Re-export mathematical forward pass trace into web/trace_data.js."""
-    cmd = [sys.executable, os.path.join(ROOT, "training/export_trace.py")]
-    if args.checkpoint:
-        cmd.extend(["--checkpoint", args.checkpoint])
-    return subprocess.run(cmd, cwd=ROOT).returncode
 
 
 def cmd_web(args):
@@ -68,7 +61,7 @@ def cmd_web(args):
     try:
         with socketserver.TCPServer(("", port), Handler) as httpd:
             url = f"http://localhost:{port}/index.html"
-            print(f"Serving TinyLM Web Explainer at {url}")
+            print(f"Serving StoryLM Web Explainer at {url}")
             print("Press Ctrl+C to stop.")
             if not args.no_browser:
                 webbrowser.open(url)
@@ -81,7 +74,7 @@ def cmd_web(args):
 def cmd_info(args):
     """Print model checkpoint information and dataset overview."""
     print("=" * 65)
-    print("  TinyLM 1.67M Parameter Tiny Language Model")
+    print("  StoryLM 1.67M Parameter Tiny Language Model")
     print("=" * 65)
     vocab_path = os.path.join(ROOT, "data/vocab.json")
     if os.path.exists(vocab_path):
@@ -107,7 +100,7 @@ def cmd_info(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TinyLM: Tiny Model CLI & Web Visualizer")
+    parser = argparse.ArgumentParser(description="StoryLM: Tiny Model CLI & Web Visualizer")
     subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
 
     # story
@@ -126,10 +119,6 @@ def main():
     p_test = subparsers.add_parser("test", help="Verify KV-cache equivalence & latency")
     p_test.add_argument("--checkpoint", default=None)
 
-    # trace
-    p_trace = subparsers.add_parser("trace", help="Export forward pass trace for web visualizer")
-    p_trace.add_argument("--checkpoint", default=None)
-
     # web
     p_web = subparsers.add_parser("web", help="Start local server for interactive web visualizer")
     p_web.add_argument("--port", type=int, default=8000, help="Port to serve on (default: 8000)")
@@ -143,8 +132,6 @@ def main():
         return cmd_story(args)
     elif args.subcommand == "test":
         return cmd_test(args)
-    elif args.subcommand == "trace":
-        return cmd_trace(args)
     elif args.subcommand == "web":
         return cmd_web(args)
     elif args.subcommand == "info":

@@ -17,11 +17,16 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 
 import torch
 
-from model import Config, TinyLM, decode_lines, generate_story
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from storylm.model import Config, StoryLM, decode_lines, generate_story
 
 WORLDS = [
     ("bluey", "BEDROOM"), ("gabby", "BEDROOM"), ("one", "PLAYROOM"),
@@ -77,7 +82,7 @@ def main():
 
     ckpt = torch.load(args.checkpoint, weights_only=False)
     cfg = Config(**ckpt["config"])
-    model = TinyLM(cfg)
+    model = StoryLM(cfg)
     model.load_state_dict(ckpt["model"])
     model.eval()
 
