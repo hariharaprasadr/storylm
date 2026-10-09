@@ -1291,9 +1291,9 @@ def build_corpus_and_vocab(variants_per_combo: int = 2, target_vocab_size: int =
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate StoryLM 3.5K vocab and training corpus")
+    parser = argparse.ArgumentParser(description="Generate the current vocabulary and training corpus")
     parser.add_argument("--variants", type=int, default=23, help="Variants per combination (default: 23 -> 57,960 stories)")
-    parser.add_argument("--target-vocab", type=int, default=3530, help="Target word count (default: 3530)")
+    parser.add_argument("--target-vocab", type=int, default=3450, help="Target word count (default: 3450, the v4 table)")
     parser.add_argument("--out-corpus", default="data/processed/train.jsonl", help="Output corpus jsonl path")
     parser.add_argument("--out-vocab", default="data/vocab.json", help="Output vocab json path")
     parser.add_argument("--out-series", default="data/series.json", help="Output series json path")
@@ -1312,13 +1312,6 @@ def main():
     with open(corpus_path, "w") as f:
         for s in stories:
             f.write(json.dumps(s) + "\n")
-
-    big_corpus_path = os.path.join(root, "data/processed/train_big.jsonl")
-    if corpus_path != big_corpus_path:
-        print(f"Writing {len(stories)} stories to {big_corpus_path}...")
-        with open(big_corpus_path, "w") as f:
-            for s in stories:
-                f.write(json.dumps(s) + "\n")
 
     print(f"Writing vocab table ({vocab_data['count']} tokens, {vocab_data['word_count']} words) to {vocab_path}...")
     with open(vocab_path, "w") as f:

@@ -1,9 +1,9 @@
-# Production target from docs/tiny_model.md.
-# 2.03M params at the 3.5K table, 1055 KiB INT4, 768 KiB KV INT8 (867 KiB INT4 for the
-# original 752-id model), fits in PSRAM with room to spare.
+# Production target, generated from the current table (docs/tiny_model.md §11).
+# 2,024,192 params at the v4 table: 1050 KiB INT4 weights, 768 KiB KV cache
+# INT8 (1,671,296 params / 867 KiB on the original 752-id table). Fits PSRAM.
 model:
-  vocab: 3589       # data/vocab.json count (59 control + 3530 words; scaled 3.5K vocabulary)
-  ctx: 384          # measured worst sequence: 296 tokens (v2 corpus), 300 (v3)
+  vocab: 3509       # data/vocab.json count (59 control + 3450 words; generation v4)
+  ctx: 384          # worst packed sequence 305 = 300 story + 5 prompt (v2: 301)
   layers: 8
   d_model: 128
   heads: 8          # head_dim 16
@@ -19,17 +19,17 @@ quantization:
 
 training:
   corpus: data/processed/train.jsonl
-  packed: data/processed/train.npz
-  batch: 16
+  packed: data/processed/train_v4.npz
+  batch: 64         # Modal T4 run; local smoke runs use 16
   lr: 3.0e-4
   weight_decay: 0.1
-  warmup_steps: 100
-  steps: 6000
+  warmup_steps: 300
+  steps: 5400
   objective: causal next-token prediction, loss masked to story tokens
-  eval: firmware validator via `storygen --check`, not perplexity
+  eval: the firmware gate (`storygen --check`, `storylm/validator.py`), not perplexity
 
 runtime:
-  weights_in_psram: true   # 867 KiB; flash-mapped is 4x slower
+  weights_in_psram: true   # 1050 KiB; flash-mapped is 4x slower
   stop_token: <END>
   sampling:
     temperature: 0.8
