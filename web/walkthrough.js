@@ -123,7 +123,7 @@
       const names = ["embed.weight", "blocks.0.attn.qkv.weight", "blocks.0.attn.proj.weight",
         "blocks.0.up.weight", "blocks.0.down.weight", "blocks.0.attn.norm.weight"];
       const describe = {
-        "embed.weight": "Word table: one row of 128 numbers per token (752 rows). Also reused at the very end to score every possible next word.",
+        "embed.weight": `Word table: one row of 128 numbers per token (${cfg.vocab} rows). Also reused at the very end to score every possible next word.`,
         "blocks.0.attn.qkv.weight": "Layer 1 attention: turns each token's vector into a query, a key and a value.",
         "blocks.0.attn.proj.weight": "Layer 1 attention output: mixes the 8 heads' results back into one vector.",
         "blocks.0.up.weight": "Layer 1 feed-forward 'up' matrix: 128 → 512 features.",
@@ -202,7 +202,9 @@
     kicker: "Step 1 · The starting prompt",
     title: "The child's choices become 5 numbers",
     plain: `The model can't read. It only sees token ids, which are numbers. ${S.from_selection ? "These are the choices you selected on the Story Studio page" : "These are the chips Story Studio starts with"} — ${S.world} · ${/^[aeiou]/.test(S.mode) ? "an" : "a"} ${S.mode} story · in the ${S.place} · about ${S.theme}. <BOS> means "a new story starts here". The model's only job is to answer one question: which token comes next?`,
-    numbers: `Vocabulary: ${cfg.vocab} tokens (30 control tokens + 722 words). Context window: up to ${cfg.ctx} tokens.`,
+    numbers: `Vocabulary: ${cfg.vocab} tokens (`
+      + `${T.vocab.filter((t) => t.startsWith("<")).length} control tokens + `
+      + `${T.vocab.filter((t) => !t.startsWith("<")).length} words). Context window: up to ${cfg.ctx} tokens.`,
     render(v) {
       const meaning = ["start of story", `character: ${S.world}`, `mode: ${S.mode}`,
         `place: ${S.place}`, `theme: ${S.theme}`];

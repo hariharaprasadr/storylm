@@ -17,7 +17,10 @@
   const cfg = S.config;
   const P = S.sampling;
   const vocab = S.vocab;
-  const MODES = ["adventure", "bedtime", "funny", "kindness"];
+  // Modes come from the exported table, so a wider vocabulary needs no code change here.
+  const MODES = (S.modes && S.modes.length)
+    ? S.modes
+    : [...new Set((S.worlds ?? []).flatMap((w) => w.modes ?? []))];
   const D = cfg.d_model, H = cfg.heads, HD = cfg.head_dim, L = cfg.layers, F = cfg.ffn, V = cfg.vocab;
 
   // ---------- weight decoding ----------
@@ -99,7 +102,7 @@
     for (let l = 0; l < L; l++) { cache.k[l].length = len; cache.v[l].length = len; }
   };
 
-  // One token through the whole model -> logits [752].
+  // One token through the whole model -> logits [cfg.vocab].
   function step(cache, tokenId) {
     const pos = cache.len;
     let x = new Float32Array(W["embed.weight"].buffer, tokenId * D * 4, D).slice();
@@ -349,7 +352,8 @@
       } else {
         stats.textContent =
           `${ids.length} tokens · generated in ${(ms / 1000).toFixed(1)}s ` +
-          `(~${Math.round(ids.length / (ms / 1000))} tok/s) by the real 1.67M weights, in your browser.`;
+          `(~${Math.round(ids.length / (ms / 1000))} tok/s) by the real fp16 checkpoint ` +
+          `(${V} ids, ${cfg.layers} layers), in your browser.`;
         busy = false;
         btn.disabled = false;
         btn.textContent = "Tell another story";

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StoryLM — a whole language model in 867 KiB</title>
-  <meta name="description" content="A 1.67M-parameter language model that writes bedtime stories, running entirely on an embedded microcontroller. Full architecture, live in-browser generation, and a step-by-step forward pass walkthrough.">
+  <title>StoryLM — a whole language model in 1050 KiB</title>
+  <meta name="description" content="A 2.02M-parameter language model that writes bedtime stories, running entirely on an embedded microcontroller. Full architecture, live in-browser generation, and a step-by-step forward pass walkthrough.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -40,14 +40,14 @@
         <div class="hero-kicker">A trained language model for embedded hardware · ESP32-S3</div>
         <h1 class="hero-title">A whole language model, <em>small enough for a matchbox.</em></h1>
         <p class="hero-sub">
-          StoryLM is a 1.67-million-parameter decoder-only Transformer that writes original bedtime stories —
+          StoryLM is a 2.02-million-parameter decoder-only Transformer that writes original bedtime stories —
           on a microcontroller, with no network, no cloud, and no API. This page runs the real weights
           in your browser; the interactive walkthrough then takes you inside every stage of the forward pass.
         </p>
         <div class="stat-grid">
-          <div class="stat"><span class="stat-num">1,671,296</span><span class="stat-label">Parameters</span></div>
-          <div class="stat"><span class="stat-num">752</span><span class="stat-label">Closed vocabulary</span></div>
-          <div class="stat"><span class="stat-num">867 KiB</span><span class="stat-label">INT4 weights</span></div>
+          <div class="stat"><span class="stat-num">2,024,192</span><span class="stat-label">Parameters</span></div>
+          <div class="stat"><span class="stat-num">3,509</span><span class="stat-label">Closed vocabulary</span></div>
+          <div class="stat"><span class="stat-num">1050 KiB</span><span class="stat-label">INT4 weights</span></div>
           <div class="stat"><span class="stat-num">384</span><span class="stat-label">Token context</span></div>
           <div class="stat"><span class="stat-num">0.5&ndash;1.5 W</span><span class="stat-label">Power budget</span></div>
         </div>
@@ -61,8 +61,11 @@
           <div class="section-eyebrow">Live inference · no server</div>
           <h2 class="section-title">Generate a story, right here</h2>
           <p class="section-desc">
-            The exact weights of the trained checkpoint (float16, 4.3&nbsp;MB) ship with this page.
-            Pick a character, a mode, a place and a theme — a vanilla-JS forward pass with a KV cache
+            The exact weights of the shipped checkpoint &mdash; <code>checkpoints/embedded_v4.pt</code>,
+            2,024,192 parameters on a 3,509-id table, float16, 5.4&nbsp;MB &mdash; ship with this page.
+            Pick a character, a mode, a place and a theme — <strong>8 modes, 9 themes, 7 places and
+            12 props per world</strong> (5 series &times; 8 &times; 7 &times; 9 = 2,520 prompt combinations,
+            every one of them present in the corpus) — and a vanilla-JS forward pass with a KV cache
             writes a brand-new story while you watch.
           </p>
         </div>
@@ -87,7 +90,7 @@
       <div class="container">
         <div class="section-head">
           <div class="section-eyebrow">How it started</div>
-          <h2 class="section-title">From a cloud microphone to a 1.67M model</h2>
+          <h2 class="section-title">From a cloud microphone to a 2.02M model</h2>
           <p class="section-desc">
             The project did not start as a language model. It started as the opposite — streaming
             audio to the cloud — until the requirements flipped the design.
@@ -129,12 +132,15 @@
             <span class="ed-card-num">04 · The teacher</span>
             <h3>The engine became the teacher</h3>
             <p>
-              The same tables generate the training corpus and the entire vocabulary: 752 ids = 30 control
-              tokens + 722 words, closed by construction, so the model can never emit a word without a
-              narration clip. A ~50K-parameter beat selector was on the table too, but a word-level generator
-              is the whole point &mdash; so a 1.67M-parameter decoder-only Transformer was trained from
-              scratch: a few thousand steps on a laptop CPU, then the expanded 57,600-story corpus on a
-              rented T4 GPU. Evaluated by the firmware validator, never perplexity.
+              The same tables generate the training corpus and the entire vocabulary, closed by construction:
+              today&rsquo;s table is 3,509 ids = 59 control tokens + 3,450 words &mdash; and every one of
+              those 3,450 words actually occurs in the corpus, so no embedding row is left at its random
+              initialisation. A ~50K-parameter beat selector was on the table too, but a word-level generator
+              is the whole point. So a 2.02M-parameter decoder-only Transformer was trained from scratch:
+              v1 (752 ids, 2,880 stories) a few thousand steps on a laptop CPU, then the expanded corpus on a
+              rented T4, and from v3 the Python mirror of the engine widened the table to 3,500 words and the
+              corpus to 57,960 stories &mdash; the v4 run below is what ships. Evaluated by the firmware
+              validator and the memorisation audit, never perplexity.
             </p>
           </div>
           <div class="ed-card">
@@ -143,8 +149,8 @@
             <p>
               Somewhere along the way the interesting artifact stopped being the appliance and became the
               model: a complete language model &mdash; tokenizer, training loop, checkpoints, a KV cache
-              proven token-identical to full recompute (4.3&times; faster), a forward-pass tracer and the
-              30-step <a href="walkthrough.html">walkthrough</a> &mdash; that fits in 867 KiB of INT4 flash.
+              proven token-identical to full recompute (2.7&times; faster), a forward-pass tracer and the
+              30-step <a href="walkthrough.html">walkthrough</a> &mdash; that fits in 1050 KiB of INT4 flash.
             </p>
           </div>
         </div>
@@ -158,7 +164,7 @@
           <div class="section-eyebrow">System schematic</div>
           <h2 class="section-title">Architecture: tokens in, a story out</h2>
           <p class="section-desc">
-            Dataflow and tensor dimensions through the 1,671,296-parameter decoder-only Transformer.
+            Dataflow and tensor dimensions through the 2,024,192-parameter decoder-only Transformer.
             Every shape below is the contract the embedded C++ runtime has to match.
           </p>
         </div>
@@ -171,7 +177,7 @@
               <span class="node-title">Input Token Sequence</span>
               <span class="node-desc">Prompt &amp; context IDs (e.g. &lt;BOS&gt;&lt;CHAR=BLUEY&gt;&lt;MODE=BEDTIME&gt;&hellip;)</span>
             </div>
-            <div class="node-shape">idx: [b, t] &isin; [0 .. 751]</div>
+            <div class="node-shape">idx: [b, t] &isin; [0 .. 3508]</div>
           </div>
 
           <div class="flow-arrow"><span>token IDs</span></div>
@@ -182,7 +188,7 @@
               <span class="node-title">Embedding Matrix</span>
               <span class="node-desc">Closed-vocabulary word projection, tied with the output head</span>
             </div>
-            <div class="node-shape">[752, 128] &bull; 96,256 params</div>
+            <div class="node-shape">[3509, 128] &bull; 449,152 params</div>
           </div>
 
           <div class="flow-arrow"><span>x: [b, t, 128]</span></div>
@@ -231,12 +237,12 @@
             <div>
               <span class="node-kicker">Output projection (tied)</span>
               <span class="node-title">Language Model Head</span>
-              <span class="node-desc">Reuses the embedding matrix: 128 &rarr; 752 vocab logits</span>
+              <span class="node-desc">Reuses the embedding matrix: 128 &rarr; 3,509 vocab logits</span>
             </div>
-            <div class="node-shape">[128, 752] &bull; 0 extra params</div>
+            <div class="node-shape">[128, 3509] &bull; 0 extra params</div>
           </div>
 
-          <div class="flow-arrow"><span>logits: [b, t, 752]</span></div>
+          <div class="flow-arrow"><span>logits: [b, t, 3509]</span></div>
 
           <div class="diagram-node">
             <div>
@@ -266,12 +272,13 @@
 
           <div class="comp-card">
             <span class="comp-card-badge">01 &bull; Vocabulary</span>
-            <h3>752 Closed Token Vocabulary</h3>
+            <h3>3,509 Closed Token Vocabulary</h3>
             <p>
-              Unlike open-domain LLMs that rely on 32k&ndash;128k subword BPE tokenizers with byte fallback, this model operates on an entirely closed 752-token table: 30 atomic control tokens (e.g. <code>&lt;CHAR=BLUEY&gt;</code>, <code>&lt;LINE&gt;</code>, <code>&lt;END&gt;</code>) and 722 words extracted from the story engine.
+              Unlike open-domain LLMs that rely on 32k&ndash;128k subword BPE tokenizers with byte fallback, this model operates on an entirely closed 3,509-token table: 59 atomic control tokens (e.g. <code>&lt;CHAR=BLUEY&gt;</code>, <code>&lt;LINE&gt;</code>, <code>&lt;END&gt;</code>) and 3,450 words extracted from the story engine.
             </p>
             <div class="comp-specs">
-              <div>&bull; Total IDs: <span>752 (30 control + 722 words)</span></div>
+              <div>&bull; Total IDs: <span>3,509 (59 control + 3,450 words)</span></div>
+              <div>&bull; Generation: <span>v4 table (v1 was 752 ids)</span></div>
               <div>&bull; Out-of-vocabulary rate: <span>0.0% (closed domain)</span></div>
               <div>&bull; Unapproved word risk: <span>physically impossible (no logits)</span></div>
             </div>
@@ -281,12 +288,12 @@
             <span class="comp-card-badge">02 &bull; Weights optimization</span>
             <h3>Tied Input/Output Embeddings</h3>
             <p>
-              The token embedding tensor <code>[752, 128]</code> is weight-tied with the output classification head (<code>head.weight = embed.weight</code>). The model uses the exact same vector representation for token intake and token probability projection.
+              The token embedding tensor <code>[3509, 128]</code> is weight-tied with the output classification head (<code>head.weight = embed.weight</code>). The model uses the exact same vector representation for token intake and token probability projection.
             </p>
             <div class="comp-specs">
-              <div>&bull; Weight shape: <span>[752, 128]</span></div>
-              <div>&bull; Parameter count: <span>96,256 params</span></div>
-              <div>&bull; Memory saved: <span>96.25 KB (50% of the vocab footprint)</span></div>
+              <div>&bull; Weight shape: <span>[3509, 128]</span></div>
+              <div>&bull; Parameter count: <span>449,152 params</span></div>
+              <div>&bull; Memory saved: <span>449.15 KB (50% of the vocab footprint)</span></div>
             </div>
           </div>
 
@@ -338,7 +345,7 @@
             <div class="comp-specs">
               <div>&bull; Buffer shape: <span>8 layers &times; 2 (K/V) &times; 384 ctx &times; 16 head_dim</span></div>
               <div>&bull; Cache RAM size: <span>768 KiB in INT8 (9.6% of 8 MB PSRAM)</span></div>
-              <div>&bull; Host speedup: <span>4.3&times; wall-clock, token-identical output</span></div>
+              <div>&bull; Host speedup: <span>2.7&times; wall-clock, token-identical output</span></div>
             </div>
           </div>
 
@@ -359,12 +366,12 @@
             <span class="comp-card-badge">08 &bull; Quantization</span>
             <h3>Groupwise INT4 Compression</h3>
             <p>
-              To fit the entire 1,671,296 parameters into the target's 8 MB flash, weights are quantized to symmetric 4-bit integers (two weights per byte) with FP16 scale factors per group of 64 weights. Activations remain INT8/FP16, enabling SIMD dot products on the microcontroller.
+              To fit the entire 2,024,192 parameters into the target's 8 MB flash, weights are quantized to symmetric 4-bit integers (two weights per byte) with FP16 scale factors per group of 64 weights. Activations remain INT8/FP16, enabling SIMD dot products on the microcontroller.
             </p>
             <div class="comp-specs">
               <div>&bull; Effective bit-width: <span>4.25 bits/weight (4-bit + FP16 scale/64)</span></div>
-              <div>&bull; Weight binary size: <span>867 KiB</span></div>
-              <div>&bull; Full model footprint: <span>867 KiB weights + 768 KiB cache = 1.63 MB</span></div>
+              <div>&bull; Weight binary size: <span>1050 KiB</span></div>
+              <div>&bull; Full model footprint: <span>1050 KiB weights + 768 KiB cache = 1,818 KiB</span></div>
             </div>
           </div>
 
@@ -390,21 +397,21 @@
           <div class="diagram-node">
             <div>
               <span class="node-kicker">Step 1 &middot; the teacher</span>
-              <span class="node-title">Story engine generates the corpus</span>
-              <span class="node-desc">The C++ engine that narrates on the device also writes the training data: 5 series &times; modes &times; places &times; themes &times; props, 23 lines per story</span>
+              <span class="node-title">The story engine generates the corpus</span>
+              <span class="node-desc">The C++ engine that narrates on the device writes the training data, and <code>storylm/corpus_builder.py</code> is its Python mirror: 2,520 prompts, 23 variants each, 20&ndash;24 lines per story, 52,183 distinct lines</span>
             </div>
-            <div class="node-shape">2,880 &rarr; 57,600 stories</div>
+            <div class="node-shape">57,960 stories &bull; 16.8 M story tokens</div>
           </div>
 
-          <div class="flow-arrow"><span>5 series &bull; 4 modes &bull; per-series places &bull; 4 themes &bull; 7 props each</span></div>
+          <div class="flow-arrow"><span>5 series &bull; 8 modes &bull; 7 places &bull; 9 themes &bull; 12 props &bull; 6 friends each</span></div>
 
           <div class="diagram-node">
             <div>
               <span class="node-kicker">Step 2 &middot; no tokenizer training</span>
-              <span class="node-title">The engine dumps the token table</span>
-              <span class="node-desc">No BPE, no byte fallback: 30 control tokens plus 722 words, closed by construction, one narration clip per word</span>
+              <span class="node-title">The table is emitted, not learned</span>
+              <span class="node-desc">No BPE, no byte fallback: 59 control tokens plus 3,450 words, closed by construction, one narration clip per word &mdash; and every packed dataset and checkpoint records which table it belongs to</span>
             </div>
-            <div class="node-shape">752 ids &bull; 30 control + 722 words</div>
+            <div class="node-shape">3,509 ids &bull; 59 control + 3,450 words</div>
           </div>
 
           <div class="flow-arrow"><span>ids, matched exactly as the firmware matches them</span></div>
@@ -423,7 +430,7 @@
           <div class="layer-frame">
             <div class="layer-frame-tag">
               <span>Step 4 &middot; the training loop (one function, CPU and GPU)</span>
-              <span>1,671,296 params</span>
+              <span>2,024,192 params</span>
             </div>
             <div class="sub-grid">
               <div class="sub-branch">
@@ -435,7 +442,7 @@
               </div>
               <div class="sub-branch">
                 <div class="branch-head"><span>What is measured</span><span>every 100 / 500 steps</span></div>
-                <div class="micro-block"><span>Masked cross-entropy (train / val)</span><span class="mb-dim">starts ~36, ends 0.26</span></div>
+                <div class="micro-block"><span>Masked cross-entropy (train / val)</span><span class="mb-dim">0.53 at step 500, ends 0.135</span></div>
                 <div class="micro-block"><span>Checkpoint = config + tensors</span><span class="mb-dim">51 tensors (tied head stored twice)</span></div>
                 <div class="micro-block"><span>Sampled story after the run</span><span class="mb-dim">generate &rarr; canonicalise &rarr; validate</span></div>
                 <div class="micro-block is-accent"><span>Verdict is the firmware validator</span><span class="mb-dim">not perplexity</span></div>
@@ -447,11 +454,11 @@
 
           <div class="diagram-node">
             <div>
-              <span class="node-kicker">Step 5 &middot; the expanded run</span>
+              <span class="node-kicker">Step 5 &middot; the shipped run</span>
               <span class="node-title">Modal T4: 5,400 steps &times; batch 64</span>
-              <span class="node-desc">About six epochs of the 57,600-story corpus (~22 minutes of GPU time). The GPU only trains: canonicalisation and validation need the engine binary, so they stay on the host</span>
+              <span class="node-desc">About six epochs of the 57,960-story corpus in 1,616 s of GPU time. The GPU only trains: canonicalisation and validation need the engine binary, so they stay on the host</span>
             </div>
-            <div class="node-shape">checkpoints/embedded_big.pt</div>
+            <div class="node-shape">checkpoints/embedded_v4.pt</div>
           </div>
 
           <div class="flow-arrow"><span>100 sampled stories, five worlds &times; four themes &times; five repeats</span></div>
@@ -462,7 +469,7 @@
               <span class="node-title">Three numbers, not one</span>
               <span class="node-desc">Validator pass rate, lines word-exact to an engine line, and lines outside the prompt's inventory — a pass rate alone cannot see drift inside a beat</span>
             </div>
-            <div class="node-shape">100/100 &bull; 99.7&nbsp;% &bull; 0.13&nbsp;%</div>
+            <div class="node-shape">100/100 &bull; 96.3&nbsp;% &bull; 13.25&nbsp;%</div>
           </div>
 
         </div>
@@ -495,7 +502,7 @@
             <p>
               The decoder ships with a KV cache because the device cannot afford a full recompute per
               token. A dedicated test proves the cached path matches the uncached one: worst logit
-              difference 1.7e-5, greedy stories identical, 2.1&times; faster on a 272-token story.
+              difference 1.9e-5, greedy stories identical, 2.7&times; faster on a 289-token story.
             </p>
           </div>
 
@@ -505,9 +512,10 @@
             <p>
               The validator cannot see a story copied out of the corpus — every word in it is approved.
               So the split the model never trained on is scored separately, and every generated story is
-              compared against the whole corpus: held-out loss equal to training loss (gap −0.000 nats),
-              no story sharing a six-line run with any training story, and 100/100 distinct stories for
-              repeated prompts.
+              compared against the whole corpus. On the shipped checkpoint (225 stories): held-out loss
+              equal to training loss (gap +0.001 nats), shared line-runs at the engine's own baseline
+              (mean 11.69 against 11.78), every generated word one the corpus uses (100.0&nbsp;%), and
+              225/225 distinct stories for repeated prompts.
             </p>
           </div>
 
@@ -529,46 +537,105 @@
             <thead>
               <tr>
                 <th>Measured, 100 sampled stories each</th>
-                <th>CPU &bull; 4,000 steps &bull; 2,880 stories</th>
-                <th class="pill-th">Modal T4 &bull; 5,400 steps <span class="pill-note">Shipped model</span></th>
+                <th>v1 &bull; 752 ids &bull; T4, 5,400 steps</th>
+                <th>v3 &bull; 3,589 ids &bull; T4, 5,400 steps</th>
+                <th class="pill-th">v4 &bull; 3,509 ids <span class="pill-note">Shipped model</span></th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td class="cell-dim">Masked validation loss</td>
-                <td class="cell-normal">0.290</td>
-                <td class="cell-tiny">0.267</td>
+                <td class="cell-normal">0.267</td>
+                <td class="cell-normal">0.137</td>
+                <td class="cell-tiny">0.138</td>
               </tr>
               <tr>
                 <td class="cell-dim">Validator pass rate</td>
-                <td class="cell-normal">97 / 100</td>
+                <td class="cell-normal">100 / 100</td>
+                <td class="cell-normal">100 / 100</td>
                 <td class="cell-tiny">100 / 100</td>
               </tr>
               <tr>
                 <td class="cell-dim">Lines word-exact to an engine line</td>
-                <td class="cell-normal">99.3&nbsp;%</td>
-                <td class="cell-tiny">99.7&nbsp;%</td>
+                <td class="cell-normal">99.7&nbsp;%</td>
+                <td class="cell-normal">96.7&nbsp;%</td>
+                <td class="cell-tiny">96.3&nbsp;%</td>
               </tr>
               <tr>
                 <td class="cell-dim">Lines outside the prompt's inventory</td>
-                <td class="cell-normal">0.88&nbsp;%</td>
-                <td class="cell-tiny">0.13&nbsp;%</td>
+                <td class="cell-normal">0.13&nbsp;%</td>
+                <td class="cell-normal">13.72&nbsp;%</td>
+                <td class="cell-tiny">13.25&nbsp;%</td>
               </tr>
               <tr>
-                <td class="cell-dim">Wall clock</td>
-                <td class="cell-normal">659 s (batch 16)</td>
-                <td class="cell-tiny">1,344 s (batch 64)</td>
+                <td class="cell-dim">Wall clock (T4, batch 64)</td>
+                <td class="cell-normal">1,344 s</td>
+                <td class="cell-normal">1,444 s</td>
+                <td class="cell-tiny">1,616 s</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <p class="section-desc" style="margin-top: 20px;">
-          The last row is the one that matters: out-of-inventory lines are the only ones the engine's
-          fallback tier has to cover, and a 6.8&times; drop in them is worth more than the loss curve.
+          Read the last row first: out-of-inventory lines are the only ones the engine's fallback tier
+          has to cover, and the 3.5K generations widened the corpus past the engine's authored banks —
+          13&nbsp;% of generated lines are wording the engine's own tables never had, and 3.7&nbsp;% are
+          lines the corpus itself never contained, while the validator is still 100/100. The loss column
+          is the one <em>not</em> to optimise: it rose when the corpus stopped repeating itself.
           The full pipeline — every command, hyperparameter and caveat — is written up in
           <a href="https://github.com/hariharaprasadr/storylm/blob/main/docs/training.md">docs/training.md</a>.
         </p>
+
+        <h3 style="margin-top: 34px;">One model, four generations &mdash; and how a checkpoint finds its table</h3>
+        <p class="section-desc">
+          Ids are positions in a list, so a checkpoint only means anything against the table it was trained on
+          &mdash; and v2 and v3 both have 3,589 ids with different word lists, so the pairing cannot be guessed
+          from the width. Every checkpoint records <code>provenance.vocab</code> when it is saved, every packed
+          dataset records <code>vocab_file</code>, and <code>storylm/vocab.py</code> refuses a mismatch or an
+          ambiguous width rather than decode the wrong words. <code>python cli.py info</code> prints the pairing
+          for every checkpoint in the tree; <code>--vocab</code> pins one deliberately (warning when it
+          contradicts the checkpoint&rsquo;s own record). The four generations are kept side by side, so any run
+          can be reproduced against the set it used.
+        </p>
+        <div class="table-wrap" style="margin-top: 18px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Generation</th>
+                <th>Closed table</th>
+                <th>Corpus</th>
+                <th class="pill-th">Checkpoint <span class="pill-note">v4 is shipped</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="cell-dim">v1</td>
+                <td class="cell-normal">752 ids &bull; 30 control + 722 words</td>
+                <td class="cell-normal">2,880 stories (baseline) &bull; 57,600 (expanded)</td>
+                <td class="cell-normal">embedded.pt &bull; embedded_big.pt</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">v2</td>
+                <td class="cell-normal">3,589 ids &bull; 59 control + 3,530 words</td>
+                <td class="cell-normal">57,960 stories &bull; 3,132 distinct lines &bull; 34.6&nbsp;% of the table&rsquo;s words occur in stories</td>
+                <td class="cell-normal">embedded_v2.pt &bull; embedded_v2_gpu.pt</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">v3</td>
+                <td class="cell-normal">3,589 ids &bull; 59 control + 3,530 words</td>
+                <td class="cell-normal">57,960 stories &bull; 52,183 distinct lines &bull; 97.7&nbsp;% of the table&rsquo;s words occur in stories</td>
+                <td class="cell-normal">embedded_v3.pt</td>
+              </tr>
+              <tr>
+                <td class="cell-dim">v4</td>
+                <td class="cell-tiny">3,509 ids &bull; 59 control + 3,450 words</td>
+                <td class="cell-tiny">57,960 stories &bull; 52,183 distinct lines &bull; 100&nbsp;% of the table&rsquo;s words occur in stories</td>
+                <td class="cell-tiny">embedded_v4.pt &mdash; <span class="pill-note">shipped</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
       </div>
     </section>
@@ -608,7 +675,7 @@
             <thead>
               <tr>
                 <th>Engineering Attribute</th>
-                <th class="pill-th">StoryLM (1.67M) <span class="pill-note">Embedded target</span></th>
+                <th class="pill-th">StoryLM (2.02M) <span class="pill-note">Embedded target</span></th>
                 <th>Standard Local LLM (7B&ndash;8B INT4)</th>
                 <th>Frontier Cloud LLM (GPT-4 / Claude)</th>
               </tr>
@@ -616,13 +683,13 @@
             <tbody>
               <tr>
                 <td class="cell-dim">Parameter Count</td>
-                <td class="cell-tiny">1,671,296 (1.67 Million)</td>
+                <td class="cell-tiny">2,024,192 (2.02 Million)</td>
                 <td class="cell-normal">7,000,000,000 &ndash; 8,000,000,000 (7B&ndash;8B)</td>
                 <td class="cell-normal">&gt; 1,000,000,000,000 (&gt; 1 Trillion MoE)</td>
               </tr>
               <tr>
                 <td class="cell-dim">Storage / Weights</td>
-                <td class="cell-tiny">867 KiB (INT4 packed)</td>
+                <td class="cell-tiny">1050 KiB (INT4 packed)</td>
                 <td class="cell-normal">3.8 GB &ndash; 5.0 GB (INT4/GGUF)</td>
                 <td class="cell-normal">Hundreds of GBs &ndash; Terabytes</td>
               </tr>
@@ -652,13 +719,13 @@
               </tr>
               <tr>
                 <td class="cell-dim">Tokenizer &amp; Vocab</td>
-                <td class="cell-tiny">752 Closed IDs (No subwords, no byte fallback)</td>
+                <td class="cell-tiny">3,509 Closed IDs (No subwords, no byte fallback)</td>
                 <td class="cell-normal">32,000 &ndash; 128,256 Subword BPE</td>
                 <td class="cell-normal">100,000 &ndash; 200,000 Multilingual BPE</td>
               </tr>
               <tr>
                 <td class="cell-dim">Output Head MACs/Token</td>
-                <td class="cell-tiny">96,256 MACs (752 &times; 128)</td>
+                <td class="cell-tiny">449,152 MACs (3509 &times; 128)</td>
                 <td class="cell-normal">~524,000,000 MACs (128,000 &times; 4,096)</td>
                 <td class="cell-normal">Billions of MACs per token</td>
               </tr>
@@ -689,7 +756,7 @@
             <span class="ed-card-num">Pillar 1</span>
             <h4>Computational Scale</h4>
             <p>
-              A standard 7B model requires roughly <strong>4,200&times; more parameters</strong> and &gt;5,000&times;
+              A standard 7B model requires roughly <strong>3,500&times; more parameters</strong> and &gt;5,000&times;
               more multiply-accumulate operations per token than the StoryLM. The StoryLM fits entirely into the
               8 MB PSRAM of an embedded microcontroller with 74% free safety headroom remaining.
             </p>
@@ -699,7 +766,7 @@
             <h4>Vocabulary &amp; Hallucination Boundary</h4>
             <p>
               Regular LLMs can assemble arbitrary toxic, violent, or dangerous strings because subword BPE permits
-              open generation. In contrast, the StoryLM's output projection head contains only 752 rows: unapproved
+              open generation. In contrast, the StoryLM's output projection head contains only 3,509 rows: unapproved
               words simply have no representation in silicon.
             </p>
           </div>
@@ -708,7 +775,7 @@
             <h4>Head Cost &amp; Memory Bandwidth</h4>
             <p>
               In open LLMs, the classification head (e.g. 128k vocab &times; 4096 dim) accounts for over 60% of
-              inference latency. The StoryLM's tied 752-word head requires only 96K operations per token, allowing
+              inference latency. The StoryLM's tied 3,509-word head requires only 449K operations per token, allowing
               seamless 250+ tokens/sec execution without starving hardware memory channels.
             </p>
           </div>
@@ -729,8 +796,8 @@
 
   <footer>
     <div class="container">
-      <p class="footer-title">Decoder-only 1.67M Transformer</p>
-      <p class="footer-line">Tied Embeddings &bull; RoPE &bull; RMSNorm &bull; GELU &bull; 752-token closed vocabulary &bull; INT4 quantized</p>
+      <p class="footer-title">Decoder-only 2.02M Transformer</p>
+      <p class="footer-line">Tied Embeddings &bull; RoPE &bull; RMSNorm &bull; GELU &bull; 3,509-token closed vocabulary &bull; INT4 quantized</p>
       <p class="footer-line">
         <a href="https://github.com/hariharaprasadr/storylm">github.com/hariharaprasadr/storylm</a>
         &nbsp;&middot;&nbsp; Live inference on this page runs entirely in your browser
