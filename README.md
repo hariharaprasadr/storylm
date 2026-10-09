@@ -1,4 +1,4 @@
-# StoryLM: 1.67M Parameter Tiny Language Model
+# StoryLM: 2.02M Parameter Tiny Language Model
 
 An edge-native, ultra-compact generative language model engineered for resource-constrained microcontrollers and embedded devices (such as the ESP32-S3), accompanied by a mathematical forward-pass tracer and an interactive web visualizer.
 
@@ -6,7 +6,7 @@ An edge-native, ultra-compact generative language model engineered for resource-
 
 ---
 
-## Backstory: from a cloud microphone to a 1.67M model
+## Backstory: from a cloud microphone to a 2.02M model
 
 **It started with streaming audio to the cloud.** My first experiments with
 pocket-sized ESP32-S3 boards (a tiny screen, a button, a microphone and a
@@ -30,33 +30,36 @@ sixteen beat tables and a validator. It solved narration and safety, but it is
 dice: beats are picked from pools, and every story is assembled, never written.
 
 **The engine became the teacher.** The same tables generate the training
-corpus and the entire vocabulary: 752 ids = 30 control tokens + 722 words,
-closed by construction, so a model trained on it can never emit a word without
-a narration clip. Two architectures were on the table: a ~50K-parameter beat
-selector that only picks recipe steps, or a word-level generator that writes
-the text itself. The beat selector adds little over the dice; the word-level
-model is the whole point. So a 1.67M-parameter decoder-only Transformer
-(8 layers, d=128, tied embeddings, RoPE, RMSNorm, GELU, no biases) was trained
-from scratch: a few thousand steps on a laptop CPU for the baseline checkpoint,
-then the expanded 57,600-story corpus on a rented T4 GPU for the big one.
+corpus and the entire vocabulary: the current v4 table is 3,509 ids = 59 control
+tokens + 3,450 words (v1 was 752 ids = 30 control tokens + 722 words), closed by
+construction, so a model trained on it can never emit a word without a narration
+clip. Two architectures were on the table: a ~50K-parameter beat selector that
+only picks recipe steps, or a word-level generator that writes the text itself.
+The beat selector adds little over the dice; the word-level model is the whole
+point. So a decoder-only Transformer (8 layers, d=128, tied embeddings, RoPE,
+RMSNorm, GELU, no biases) was trained from scratch: the v1 model (752 ids,
+1.67M parameters) a few thousand steps on a laptop CPU for the baseline
+checkpoint, then the expanded 57,600-story corpus on a rented T4 GPU for the big
+one. That lineage now ships as v4: 2,024,192 parameters (2.02M) on the 3,509-id
+table, trained on a Modal T4 via `make train-modal`.
 Evaluation was never perplexity — sampled stories go back through the engine's
 canonicaliser and the firmware validator, the same gate the device will use.
 
 **That model is StoryLM.** Somewhere along the way the interesting artifact
 stopped being the appliance and became the model: a complete language model —
 tokenizer, training loop, checkpoints, a KV cache proven token-identical to
-full recompute (4.3x faster), a forward-pass tracer and a 30-step browser
-walkthrough — that fits in 867 KiB of INT4 flash. This repo holds it.
+full recompute (2.7x faster on this laptop, §4), a forward-pass tracer and a 30-step browser
+walkthrough — that fits in 1050 KiB of INT4 flash. This repo holds it.
 
 ## Key Specifications
 
 | Engineering Metric | StoryLM (Tiny SLM) | Standard Local LLM | Frontier Cloud LLM |
 | :--- | :--- | :--- | :--- |
-| **Parameter Count** | **1,671,296 (1.67M)** | 7,000,000,000 (7B) | ~1,800,000,000,000 (1.8T) |
+| **Parameter Count** | **2,024,192 (2.02M)** | 7,000,000,000 (7B) | ~1,800,000,000,000 (1.8T) |
 | **Layers / Dim / Heads** | **8 layers / d=128 / 8 heads** | 32 layers / d=4096 / 32 heads | 96+ layers / d=12288+ |
-| **Vocabulary** | **752 tokens** (closed-domain) | 32,000–128,000 (BPE) | 100,000+ |
-| **Weight Footprint** | **6.7 MB** (FP32) / **~835 KB** (INT4) | ~4.2 GB (INT4) | Distributed across clusters |
-| **KV-Cache RAM** | **~65 KB** (at ctx=256) | ~512 MB – 1 GB | Multi-Gigabyte VRAM |
+| **Vocabulary** | **3,509 tokens** (closed-domain, v4) | 32,000–128,000 (BPE) | 100,000+ |
+| **Weight Footprint** | **7.7 MB** (FP32) / **1050 KiB** (INT4) | ~4.2 GB (INT4) | Distributed across clusters |
+| **KV-Cache RAM** | **512 KiB** (INT8, at ctx=256) | ~512 MB – 1 GB | Multi-Gigabyte VRAM |
 | **Target Hardware** | **Microcontroller (ESP32-S3 / Cortex-M)** | Desktop GPU / Apple M-series | Multi-H100/TPU Datacenter |
 | **Power Budget** | **0.5 W – 1.5 W** | 25 W – 150 W | 700 W per GPU |
 
@@ -70,35 +73,49 @@ storylm/
 ├── cli.py                        # Unified command-line interface
 ├── requirements.txt              # Python dependencies (torch, numpy, pyyaml)
 ├── pyproject.toml                # Standard python packaging
-├── Makefile                      # Convenient CLI targets (story, test, web, info, train)
+├── Makefile                      # Convenient CLI targets (story, test, web, info, train, train-modal, audit, corpus)
 │
 ├── storylm/                      # Core Model Library
 │   ├── __init__.py               # Package exports
 │   ├── model.py                  # StoryLM architecture, RoPE, Attention, KV-Cache
+│   ├── vocab.py                  # Pairs a checkpoint with the token table it was trained on
+│   ├── corpus_builder.py         # 3.5K-vocabulary corpus generator & word classifier
+│   ├── validator.py              # validate/canonicalise a story (drop-in for storygen)
 │   ├── story.py                  # Standalone prompt & story generation engine
 │   └── test_cache.py             # KV-cache equivalence & speed benchmark
 │
-├── checkpoints/                  # Trained PyTorch Checkpoints
-│   ├── embedded_big.pt           # 1.67M model trained on expanded corpus (6.7 MB)
-│   └── embedded.pt               # Baseline model checkpoint (6.7 MB)
+├── checkpoints/                  # Trained PyTorch Checkpoints (one per generation)
+│   ├── embedded_v4.pt            # v4 table (3,509 ids) - made by `make train-modal`
+│   ├── embedded_v3.pt            # v3 table (3,589 ids)
+│   ├── embedded_v2_gpu.pt        # v2 table (3,589 ids), GPU run
+│   ├── embedded_v2.pt            # v2 table (3,589 ids), local run
+│   ├── embedded_big.pt           # v1 (752 ids) trained on the expanded corpus
+│   ├── embedded.pt               # v1 (752 ids) baseline checkpoint
+│   └── smoke.pt                  # 300-step local smoke run (never a shipped checkpoint)
 │
 ├── configs/
 │   └── embedded_l8_d128.yaml     # Architectural hyperparameter config
 │
 ├── data/
-│   ├── vocab.json                # 752-token closed dictionary
+│   ├── vocab.json                # 3,509-token closed dictionary (current, v4)
 │   ├── series.json               # Series prompts, place IDs & theme combinations
+│   ├── vocab_v1.json..vocab_v4.json    # Pinned token tables (v1 = 752 ids)
+│   ├── series_v1.json..series_v4.json  # Pinned series definitions per generation
 │   └── processed/
-│       ├── train_big.jsonl       # Full character story corpus (~178 MB)
-│       ├── train_big.npz         # Pre-tokenized uint16 numpy dataset (~6.3 MB)
-│       ├── train.jsonl           # Baseline corpus (~8.9 MB)
-│       └── train.npz             # Tokenized baseline dataset (~437 KB)
+│       ├── train.jsonl           # Current v4 raw corpus, 57,960 stories / 52,183 distinct lines (~208 MB, gitignored)
+│       ├── train_v2.jsonl        # v2 raw corpus
+│       ├── train_v4.npz          # Pre-tokenized uint16 dataset for v4 (~3.8 MB)
+│       ├── train_v3.npz          # v3 packed dataset
+│       ├── train_v2.npz          # v2 packed dataset
+│       └── corpus/               # The 57,960-story corpus as 5 gzipped shards (8.2 MB)
+│                                 # `make corpus-join` rebuilds train.jsonl from them
 │
 ├── training/                     # Training & Tracing Pipelines
 │   ├── train_model.py            # Local PyTorch training loop (AdamW, Cosine LR)
 │   ├── prepare_data.py           # Corpus tokenization & .npz dataset packing
 │   ├── export_story.py           # Full fp16 weights + prompts -> web/story_data.js
 │   ├── modal_train.py            # Scalable Cloud GPU training script (Modal)
+│   ├── memorisation.py           # Overfitting / memorisation audit (`make audit`)
 │   └── sample.py                 # Evaluation & sampling harness
 │
 ├── web/                          # Standalone Interactive Web Visualizer
@@ -114,7 +131,7 @@ storylm/
 │
 └── docs/                         # Technical Specs & Architecture Notes
     ├── training.md               # End-to-end training pipeline (corpus -> pack -> train -> evaluate)
-    ├── tiny_model.md             # 1.67M model architecture, memory budget & vocabulary scaling
+    ├── tiny_model.md             # 2.02M model architecture, memory budget & vocabulary scaling
     ├── story_format.md           # Prompt tags & story structure specs
     ├── how_it_works.md           # Engineering deep-dive
     └── review_gaps_and_improvements.md # Model analysis & future roadmap
@@ -142,6 +159,10 @@ python cli.py story --world bluey --mode bedtime --place backyard --theme help
 # List all available characters, places, and modes
 python cli.py story --list
 ```
+The default checkpoint is the newest generation present in `checkpoints/`. Every entry
+point pairs a checkpoint with the token table it was trained on and refuses a mismatch:
+`python cli.py info` prints the generation each checkpoint maps to, and `--vocab` overrides
+the table when you want to run a pinned generation explicitly.
 
 ### 3. Launch the Interactive Web Explainer
 Explore the inner workings of the model in your browser — live at
@@ -150,7 +171,7 @@ Explore the inner workings of the model in your browser — live at
 python cli.py web
 ```
 This serves `web/index.html`, which features:
-- **Story Studio — Live In-Browser Generation**: the page ships the real checkpoint weights (fp16, ~4.3 MB) and a vanilla-JS port of the model with a KV cache; pick character, mode, place and theme, and a brand-new story is generated live in the browser (~80-100 tok/s, no server).
+- **Story Studio — Live In-Browser Generation**: the page ships the real checkpoint weights (fp16, 5.4 MB, from `checkpoints/embedded_v4.pt`) and a vanilla-JS port of the model with a KV cache; pick character, mode, place and theme, and a brand-new story is generated live in the browser (measured on an idle laptop: 290-299 tokens in 0.6-0.7 s, ~450 tok/s, no server; the page prints its own token rate after every story).
 - **Interactive Dataflow Diagram**: View tensor shapes through Embeddings, 8x Transformer Layers, and Output Head.
 - **Component Breakdown**: Deep dives into RMSNorm, RoPE, Preallocated KV-Cache, and GELU FFN.
 - **"Under the Hood" Walkthrough** (on `walkthrough.html`, linked from the main page): a 30-step slowed-down execution of a real forward pass — computed live in the browser from the same fp16 weights Story Studio runs, following the chips you selected there (the walkthrough links carry the selection; bare URLs use the defaults), and showing the actual numbers and arithmetic instead of pre-baked graphics:
@@ -159,7 +180,7 @@ This serves `web/index.html`, which features:
   - Follow the residual stream as a stages × 128-dim matrix, with the real q·k dot products, √d scores and softmax weights per head.
   - Watch FFN feature detectors switch on, with the real up/GELU/down arithmetic and a movement table that adds up.
   - Peek via the "logit lens" at what the model would guess after every layer.
-  - Map all 752 output logits back onto the vocabulary — one cell per word, shaded by its actual score — then roll the seeded sampling dice and read the first line it writes.
+  - Map all 3,509 output logits back onto the vocabulary — one cell per word, shaded by its actual score — then roll the seeded sampling dice and read the first line it writes.
 - **StoryLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
 
 ### 4. Verify KV-Cache Parity & Performance
@@ -167,14 +188,17 @@ Verify that KV-cache output is numerically identical to standard full-context re
 ```bash
 python cli.py test
 ```
-*Sample output:*
+*Sample output (the v4 checkpoint):*
 ```
-logits: worst max-abs diff 0.00e+00 -> ok
+checkpoint checkpoints/embedded_v4.pt  [v4 table: data/vocab.json, 3509 ids]
+logits: worst max-abs diff 1.91e-05 -> ok
 greedy stories identical with and without the cache: yes
- no cache: 0.82s for 142 tokens (5.8 ms/token)
- KV cache: 0.19s for 142 tokens (1.3 ms/token)
-speedup: 4.3x
+ no cache: 1.59s for 289 tokens (5.5 ms/token)
+ KV cache: 0.60s for 289 tokens (2.1 ms/token)
+speedup: 2.7x
 ```
+The diff is float32 summation order, not cache error: both paths recompute the final
+line, and greedy stories are token-identical.
 
 ---
 
@@ -185,12 +209,13 @@ exact token stream, every hyperparameter, the Modal GPU run, and how the result 
 judged — is documented in [`docs/training.md`](docs/training.md).
 
 ### Preprocess the Data
-Encode the raw story corpus into tokenized `.npz` arrays:
+Encode the raw story corpus into tokenized `.npz` arrays (`make corpus` rebuilds the
+corpus from `storylm/corpus_builder.py` and then packs it exactly this way):
 ```bash
 python training/prepare_data.py \
   --corpus data/processed/train.jsonl \
   --vocab data/vocab.json \
-  --out data/processed/train.npz
+  --out data/processed/train_v4.npz
 ```
 
 ### Train
@@ -198,12 +223,16 @@ Smoke runs are local and prove the plumbing; **real training runs on a Modal GPU
 (`training/train_model.py` refuses more than 500 CPU steps unless `--allow-cpu` is given).
 
 ```bash
-# Smoke test, local, plumbing only (300 steps, ~1 min)
-python training/train_model.py --data data/processed/train.npz --steps 300
+# Smoke test, local, plumbing only (300 steps, ~1 min; writes checkpoints/smoke.pt)
+python training/train_model.py --data data/processed/train_v4.npz --steps 300
 
 # Real training run: Modal T4, volumes + upload + run + download
 make train-modal                     # DATA=/VOCAB=/NAME=/STEPS=/BATCH= override the defaults
 ```
+
+The smoke run is never a shipped checkpoint; `make train-modal` defaults to
+`DATA=train_v4.npz`, `VOCAB=vocab_v4.json` and `NAME=embedded_v4`, and the checkpoint it
+writes records the table it was trained on.
 
 Setup for the GPU path: `.venv/bin/pip install modal`, then `cp .env.example .env.local`
 and fill in `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET`.
@@ -215,21 +244,23 @@ loss gap, story-level verbatim copying against the engine's own baseline, line-i
 reuse, and how many distinct stories come out of one prompt.
 
 ```bash
-make audit                       # small checkpoint + 2,880-story corpus (~50 s)
-python cli.py audit --checkpoint checkpoints/embedded_big.pt \
-    --corpus data/processed/train_big.jsonl --packed data/processed/train_big.npz
+make audit                       # newest checkpoint; corpus and packed default to its generation
+python cli.py audit --checkpoint checkpoints/embedded_v4.pt \
+    --corpus data/processed/train.jsonl --packed data/processed/train_v4.npz
 ```
 
-Measured on both shipped checkpoints: held-out loss equal to training loss (gap −0.000
-nats), no generated story sharing a six-line run with any training story, and 100/100
-distinct stories for repeated prompts. Details in
+Measured on the shipped v4 checkpoint (225 generated stories): held-out loss equal to
+training loss (gap +0.001 nats), shared line-runs at the engine's own baseline (mean 11.69
+against 11.78, so nothing was copied), every generated word one the corpus uses (100.0 %),
+and 225/225 distinct stories for repeated prompts. The v1 baselines are flatter still
+(gap −0.000 nats) because their corpora are less repetitive. Details in
 [`docs/training.md`](docs/training.md) §9.
 
 ### Export Weights for the Web
 After training a new checkpoint, refresh the weights both pages use:
 ```bash
 python cli.py story --raw   # smoke-check sampling from the new checkpoint
-python training/export_story.py
+python training/export_story.py   # defaults to the newest checkpoint; --vocab pins the table
 ```
 `web/story_data.js` is the single source of truth: Story Studio generates from it and the
 walkthrough computes every displayed number from it in the browser.

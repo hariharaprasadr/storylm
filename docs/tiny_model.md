@@ -18,8 +18,8 @@ world tables in `story_engine.cpp`. The model's job is to fill that spine:
 
 ```mermaid
 flowchart LR
-    P["prompt<br/>&lt;CHAR=BLUEY&gt;&lt;MODE=BEDTIME&gt;<br/>&lt;PLACE=BEDROOM&gt;&lt;THEME=HELP&gt;"] --> M["🧠 L8 d128 model<br/>1.67 M params, INT4"]
-    M --> S["story text<br/>269-301 tokens"]
+    P["prompt<br/>&lt;CHAR=BLUEY&gt;&lt;MODE=BEDTIME&gt;<br/>&lt;PLACE=BEDROOM&gt;&lt;THEME=HELP&gt;"] --> M["🧠 L8 d128 model<br/>2.02 M params, INT4"]
+    M --> S["story text<br/>278-300 tokens"]
     S --> V{"🛡️ validate()"}
     V -->|ok| N["🔊 narration from clips"]
     V -->|reject| F["fallback: engine story"]
@@ -30,7 +30,7 @@ Two possible jobs, same architecture family:
 | | A. Beat selector | B. Word-level line generator |
 |---|---|---|
 | Emits | one id per phase (24 ids) | the story text, token by token |
-| Params | ~50 K | 1.67 M |
+| Params | ~50 K | 2.02 M |
 | Guarantee | every choice is narratable | every word is narratable (closed vocabulary) |
 | Beats the dice at | combination taste | combination taste, phrasing, ordering |
 
@@ -44,30 +44,30 @@ device" means.
 build the stories:
 
 ```text
-count 752 = 30 control tokens + 722 words
+count 3,509 = 59 control tokens + 3,450 words
   <PAD> <BOS> <EOS> <END> <LINE> </LINE>
-  5 x <CHAR=..>   4 x <MODE=..>   11 x <PLACE=..>   4 x <THEME=..>
-  722 words: every word the spine, the worlds and the slot values can produce
+  5 x <CHAR=..>   8 x <MODE=..>   31 x <PLACE=..>   9 x <THEME=..>
+  3,450 words: every word the spine, the worlds and the slot values can produce
 ```
 
-Measured over all 2,880 corpus stories:
+Measured over all 57,960 corpus stories:
 
 | | |
 |---|---|
-| Tokens per sequence (prompt + story) | **258-299**, median 277 |
-| Tokens per story (output only) | **253-295**, median 272 |
+| Tokens per sequence (prompt + story) | **283-305**, median 295 |
+| Tokens per story (output only) | **278-300**, median 290 |
 | Out-of-vocabulary tokens | **0** |
 
 Consequences that drive everything else:
 
-1. **A model that can only emit these 752 ids cannot emit a word without a
+1. **A model that can only emit these 3,509 ids cannot emit a word without a
    narration asset.** The validator's `unapproved_word` rule degrades from a
    content guard to a corruption guard.
-2. **The output head is tiny.** 752 x 128 = 96 K multiply-accumulates per
-   token, against 32 K x 128 = 4.2 M for a 32 K BPE head - 44x cheaper. In the
+2. **The output head is tiny.** 3,509 x 128 = 449 K multiply-accumulates per
+   token, against 32 K x 128 = 4.2 M for a 32 K BPE head - 9.3x cheaper. In the
    published ESP32-S3 prior art the output head was 67 % of token time.
 3. **The context budget is measured, not guessed:** 384 tokens covers the
-   worst observed sequence (299) with 22 % headroom.
+   worst observed sequence (305 = 300 story + 5 prompt tokens) with 26 % headroom.
 
 Encoding rule (the whole tokenizer): control tokens for the prompt and the
 line markers; words by `normalize_word()` lookup (letters only, lowercased, so
@@ -79,11 +79,12 @@ the model cannot emit "Bluey" and "bluey" as different tokens and cannot waste
 capacity on case variants. The renderer restores the sentence-initial capital,
 the full stop and the cast names (read from `data/series.json`, so a story only
 ever capitalises its own world's cast). Measured cost of the alternative: the
-corpus contains just **58** distinct capitalised forms, so a case-preserving
-table would be 722 -> 759 words (+37 ids, +4.7 K params) and would remove the
-renderer rule entirely. That is the planned follow-up; the two cosmetic
-artifacts of the interim rule are the Numberblocks number-words (where "one"
-is both a name and an ordinary word) and "Mrs Rogers" losing its period.
+corpus contains just **52** distinct capitalised forms outside the sentence-initial
+position, so a case-preserving table would be 3,450 -> 3,502 words (+52 ids,
++6.7 K params) and would remove the renderer rule entirely. That is the planned
+follow-up; the two cosmetic artifacts of the interim rule are the Numberblocks
+number-words (where "one" is both a name and an ordinary word) and "Mrs Rogers"
+losing its period.
 
 ## 3. Architecture
 
@@ -91,26 +92,26 @@ Tied input/output embeddings, RoPE (no learned position table), pre-norm, GELU
 FFN, no biases except attention projections kept for quantisation simplicity.
 
 Recommended: **layers 8, d_model 128, heads 8 (head dim 16), FFN 512,
-vocal 752 (30 control + 722 words), context 384, tied embeddings, INT4 weights
+vocal 3,509 (59 control + 3,450 words), context 384, tied embeddings, INT4 weights
 group-size 64 with FP16 scales, INT8 KV cache.**
 
 | Tensor | Shape | Params |
 |---|---|---:|
-| `tok_emb` (tied with the output head) | [752, 128] | 96,256 |
+| `tok_emb` (tied with the output head) | [3509, 128] | 449,152 |
 | per layer x8: `wq wk wv wo` | [128, 128] each | 65,536 |
 | per layer x8: `w1` [128, 512], `w2` [512, 128] | | 131,072 |
-| per layer x8: `attn_norm`, `ffn_norm` FP16, 4 attention biases FP16 | | 384 |
+| per layer x8: `attn_norm`, `ffn_norm` FP16 | [128] each | 256 |
 | `final_norm` | [128] FP16 | 128 |
-| **total** | | **1,671,296** |
+| **total** | | **2,024,192** |
 
 Cost at 4.25 bits per weight (4-bit payload + FP16 scale per 64 weights):
 
 | | |
 |---|---|
-| Weights in flash | **867 KiB** |
-| Norms and biases (FP16) | ~7 KB |
+| Weights in flash | **1050 KiB** |
+| Norms (FP16) | ~4 KB |
 | KV cache, INT8, context 384 | **768 KB** |
-| Activations (SRAM) | ~5 KB (x[128], hidden[512], logits[752], scores[384]) |
+| Activations (SRAM) | ~18 KB (x[128], hidden[512], logits[3509], scores[384]) |
 | Prefetch buffer (PSRAM) | 16 KB |
 
 Alternatives, computed the same way:
@@ -120,11 +121,14 @@ Alternatives, computed the same way:
 | L2 d64 h4 ffn192 | 0.13 M | 68 KiB | 96 KiB | 0.2-1.0 s |
 | L4 d96 h6 ffn288 | 0.44 M | 229 KiB | 288 KiB | 0.7-3.5 s |
 | L6 d128 h8 ffn384 | 1.08 M | 561 KiB | 576 KiB | 1.7-8.6 s |
-| **L8 d128 h8 ffn512** | **1.67 M** | **867 KiB** | **768 KiB** | **2.7-13.3 s** |
+| **L8 d128 h8 ffn512** | **2.02 M** | **1050 KiB** | **768 KiB** | **2.7-13.3 s** |
 | L12 d128 h8 ffn512 | 2.46 M | 1.25 MiB | 1.13 MiB | 3.9-19.6 s |
 
-Flash after shipping it: app ~2.25 MB + model 0.87 MB + voice ~2 MB = **5.12 of
-8 MB**, about 2.9 MB spare.
+_The L2/L4/L6/L12 rows are computed at the v1 752-id vocabulary (their timings
+were measured there); only the shipped L8 row is the v4 3,509-id table._
+
+Flash after shipping it: app ~2.25 MB + model 1.05 MB + voice ~2 MB = **5.30 of
+8 MB**, about 2.7 MB spare.
 
 ## 4. Training
 
@@ -166,7 +170,7 @@ the published 28.9 M-parameter port fits a 16 MB part, not more layers here.
 flowchart TB
     B["boot: read model partition"] --> C{"magic + CRC + vocab_count<br/>+ table CRC"}
     C -->|bad| F["fallback tier:<br/>engine stories only"]
-    C -->|ok| P["copy 867 KiB into PSRAM"]
+    C -->|ok| P["copy 1050 KiB into PSRAM"]
     P --> L["per token:<br/>norm -> QKV -> RoPE -> attention<br/>-> FFN -> head (all INT4 + SIMD)"]
     L --> D["decode token -> line buffer"]
     D --> E{"&lt;/LINE&gt; reached?"}
@@ -179,8 +183,8 @@ Two placement options, both measured against the narration budget:
 
 | Placement | Read per token | Per story (301 tokens) |
 |---|---|---|
-| Flash-mapped (`esp_partition_mmap`) | 867 KiB at 20-40 MB/s | 6.5-13.3 s |
-| **PSRAM-resident (recommended)** | 867 KiB at ~60-100 MB/s | **2.7-4.5 s** |
+| Flash-mapped (`esp_partition_mmap`) | 1050 KiB at 20-40 MB/s | 6.5-13.3 s |
+| **PSRAM-resident (recommended)** | 1050 KiB at ~60-100 MB/s | **2.7-4.5 s** |
 
 Narration of the same story takes **111 s**, so generation is 25-40x faster than
 playback: the device can generate line by line, far ahead of the speaker, which
@@ -220,7 +224,7 @@ Implementation notes:
   The FLOP reduction is larger (uncached decoding costs ~n/2 times more) but at
   this size Python dispatch dominates, not arithmetic. On the device the cache is
   not an optimisation but a requirement: without it every decoded token would
-  re-read all 867 KiB of weights n times, ~243 MB of flash traffic per token at
+  re-read all 1050 KiB of weights n times, ~294 MB of flash traffic per token at
   n=280 [projection, not measured - the firmware is not built].
 * `temperature 0` is greedy and deterministic, which is what the equivalence test
   and any device/host comparison should use.
@@ -276,8 +280,8 @@ channel, not on quality. Verified config of `roneneldan/TinyStories-1M`:
 Three concrete costs:
 
 1. **The output head costs more than our entire model.** 50,257 x 64 = 3.2 M
-   multiply-accumulates per token, versus 1.67 M for the whole L8 d128 model
-   and 96 K for our 752-id head. In the published ESP32-S3 port this head was
+   multiply-accumulates per token, versus 2.02 M for the whole L8 d128 model
+   and 449 K for our 3,509-id head. In the published ESP32-S3 port this head was
    67 % of token time.
 2. **The runtime is a different runtime.** Two attention variants, learned
    absolute positions, and head dimension 4 (not a good SIMD shape) - versus
@@ -302,24 +306,24 @@ flowchart LR
     A --> V{"validate()"}
     V -->|ok| C["extra corpus rows"]
     V -->|reject| X["discard"]
-    C --> S["student<br/>L8 d128, 752 ids"]
-    T --> B["2. logit distillation<br/>map 752 ids to teacher token<br/>strings, KL + CE"]
+    C --> S["student<br/>L8 d128, 3,509 ids"]
+    T --> B["2. logit distillation<br/>map 3,509 ids to teacher token<br/>strings, KL + CE"]
     B --> S
     T --> D["3. if free-form prose is<br/>ever wanted: 15M-class base<br/>on a 16 MB part + real TTS"]
 ```
 
 Route 1 needs no runtime change and reuses the validator already built: the
 teacher supplies surface variety, the engine still owns the format, and the
-student still ships as 867 KiB with a closed vocabulary. Route 2 is stronger
+student still ships as 1050 KiB with a closed vocabulary. Route 2 is stronger
 when the corpus is small. Route 3 is a different device with a different
 narration story.
 
 **Why from-scratch is defensible here.** The task is not English. With a closed
-722-word table and a fixed spine, the model has to choose ~22 beats from pools
+3,450-word table and a fixed spine, the model has to choose ~22 beats from pools
 of 5-10 and emit their exact surface form; the grammar is a non-problem.
 What buys quality is the content inventory (beats, props, casts, worlds),
-which the corpus generator scales for free: `--variants 240` already yields
-57,600 distinct stories / 16.0 M tokens. Teacher-written rows are a useful
+which the corpus generator scales for free: `--variants 23` already yields
+57,960 distinct stories / 16.8 M story tokens. Teacher-written rows are a useful
 *addition* to that corpus, not a replacement for the architecture.
 
 
@@ -347,7 +351,7 @@ Trained on this repository's corpus with `training/train_model.py`, on CPU
 
 | | |
 |---|---|
-| Model | L8 d128 h8 ffn512, tied, ctx 384 - **1,671,296 params**, 867 KiB INT4, 768 KiB KV |
+| Model | L8 d128 h8 ffn512, tied, ctx 384, 752-id v1 table - **1,671,296 params**, 867 KiB INT4, 768 KiB KV |
 | Data | 2,880 stories / ~0.8 M story tokens, 16 per batch |
 | Schedule | AdamW, lr 3e-4 OneCycle with 100 warmup steps, grad clip 1.0 |
 | Run | **4,000 steps in 659 s** (6.1 steps/s on CPU) |
@@ -412,7 +416,7 @@ Computed with `StoryLM(Config(...)).param_report()` on this repository's model,
 
 | Configuration | Params | Embedding share | INT4 + scales | KV INT8 | Weights + cache | fp32 checkpoint |
 |---|---:|---:|---:|---:|---:|---:|
-| **today** · 752 ids · d128 h8 ffn512 | 1,671,296 | 5.8 % | 867 KiB | 768 KiB | **1,635 KiB** | 6.7 MB |
+| **v1** · 752 ids · d128 h8 ffn512 | 1,671,296 | 5.8 % | 867 KiB | 768 KiB | **1,635 KiB** | 6.7 MB |
 | 3,530 words · d128 h8 ffn512 | 2,026,880 | 22.3 % | 1,052 KiB | 768 KiB | **1,820 KiB** | 8.1 MB |
 | **4,030 words** · d128 h8 ffn512 | 2,090,880 | 24.7 % | 1,085 KiB | 768 KiB | **1,853 KiB** | 8.4 MB |
 | 4,030 words · d160 h10 ffn640 | 3,105,120 | 20.8 % | 1,611 KiB | 960 KiB | **2,571 KiB** | 12.4 MB |
@@ -433,7 +437,7 @@ with FP16 scales the head's working set per token is:
 
 | Configuration | Head read / token | PSRAM-resident (~80 MB/s) | Flash-mapped (~30 MB/s) | Head share of per-token MACs |
 |---|---:|---:|---:|---:|
-| today | 50 kB | 0.6 ms · 1,640 tok/s | 1.6 ms · 615 tok/s | 5 % |
+| v1 (752 ids) | 50 kB | 0.6 ms · 1,640 tok/s | 1.6 ms · 615 tok/s | 5 % |
 | 4,030 words · d128 | 268 kB | 3.3 ms · 306 tok/s | 8.7 ms · 115 tok/s | 22 % |
 | 7,030 words · d128 | 467 kB | 5.7 ms · 175 tok/s | 15.2 ms · 66 tok/s | 33 % |
 
@@ -455,7 +459,7 @@ mono IMA ADPCM (8 kB/s, 0.48 MB/min) a 0.4 s word is 3.1 kB:
 
 | Word-keyed clips | 16 kHz | 8 kHz |
 |---|---:|---:|
-| 722 (today) | 2.2 MB | 1.1 MB |
+| 722 (v1) | 2.2 MB | 1.1 MB |
 | 3,530 | 10.8 MB | 5.4 MB |
 | 4,030 | 12.3 MB | 6.1 MB |
 | 7,030 | 21.5 MB | 10.7 MB |
@@ -468,11 +472,11 @@ the 16 MB part.
 
 **Corpus.** The vocabulary is closed by construction, so new words must first exist in the
 beat and slot tables (§4) — the corpus, the token table and the clips all follow the
-content. Holding today's coverage (~21.7 k story tokens and ~2,315 parameters per word):
+content. Holding v1's coverage (~21.7 k story tokens and ~2,315 parameters per word):
 
 | Words | Parameters per word (d128) | Corpus implied |
 |---|---:|---:|
-| 722 | 2,315 | 15.7 M tokens (today's 57,600 stories) |
+| 722 | 2,315 | 15.7 M tokens (v1's 57,600 stories) |
 | 4,030 | 519 | ~88 M tokens (≈325,000 stories) |
 | 7,030 | 352 | ~153 M tokens (≈560,000 stories) |
 
@@ -506,8 +510,8 @@ for vocab in (752, 3530, 4030, 7030):
 ## 11. Scaled 3.5K Vocabulary & Character Arc Implementation
 
 The repository implements the 3.5K vocabulary scale described in §10: scaling the
-vocabulary from 752 tokens (722 words) to **3,589 tokens (3,530 words + 59 control tokens)**,
-with authentic narrative character arcs and expanded templates.
+vocabulary from 752 tokens (722 words) in v1 to **3,509 tokens (3,450 words + 59 control
+tokens)** in v4, with authentic narrative character arcs and expanded templates.
 
 ### 11.1 Authentic Character Arcs
 
@@ -562,10 +566,10 @@ Generated via `make corpus` (`storylm/corpus_builder.py` and `training/prepare_d
 
 | Metric | Target Budget | Measured |
 |---|---|---|
-| Vocabulary size | ~3.5K words | **3,530 words** (3,589 tokens with controls) |
+| Vocabulary size | ~3.5K words | **3,450 words** (3,509 tokens with controls) |
 | Stories in corpus | Match 55K–58K baseline | **57,960 stories** (balanced 23 variants across 2,520 prompts) |
-| Words per story | 200–250 words | **227–248 words**, median 242 |
-| Lines per story | 13–30 lines | **20–22 lines**, median 21 |
+| Words per story | 200–250 words | **236–248 words**, median 244 |
+| Lines per story | 13–30 lines | **20–24 lines**, median 22 |
 | Words per line | ≤ 16 words | **≤ 16 words** (strictly enforced) |
-| Token sequence length | ≤ 384 tokens | **273–296 tokens**, median 289 |
+| Token sequence length | ≤ 384 tokens | **278–300 tokens**, median 290 |
 | Out-of-vocabulary rate | 0 | **0 OOV** (closed vocabulary guarantee) |
