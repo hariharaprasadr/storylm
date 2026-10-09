@@ -45,11 +45,10 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from storylm.model import Config, StoryLM, decode_lines, generate_story
+from storylm.vocab import (TableMismatch, default_checkpoint, series_of,
+                           table_for_checkpoint)
 
-WORLDS = [("bluey", "BEDROOM"), ("gabby", "BEDROOM"), ("one", "PLAYROOM"),
-          ("amelia", "KITCHEN"), ("junie", "BEDROOM")]
 THEMES = ["HELP", "SHARE", "BRAVE", "TRY"]  # fallback; the vocab's own list is used below
-SERIES_IDS = {"one": "numberblocks"}
 
 
 def themes_from_vocab(tokens):
@@ -118,11 +117,14 @@ def masked_ce(model, ids, mask, rows, batch=16):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", default="checkpoints/embedded.pt")
+    ap.add_argument("--checkpoint", default=None,
+                    help="checkpoint to audit (default: the newest in checkpoints/)")
     ap.add_argument("--corpus", default="data/processed/train.jsonl",
                     help="the corpus this checkpoint was trained on")
-    ap.add_argument("--packed", default="data/processed/train.npz")
-    ap.add_argument("--vocab", default="data/vocab.json")
+    ap.add_argument("--packed", default=None,
+                    help="packed copy of that corpus (default: the generation's train_v<N>.npz)")
+    ap.add_argument("--vocab", default=None,
+                    help="token table (default: the one the checkpoint was trained on)")
     ap.add_argument("--stories", type=int, default=100,
                     help="generated stories (5 worlds x themes x repeats)")
     ap.add_argument("--repeats", type=int, default=5)
@@ -131,19 +133,33 @@ def main():
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
-    ckpt = torch.load(args.checkpoint, weights_only=False)
+    checkpoint = args.checkpoint or default_checkpoint()
+    if checkpoint is None or not os.path.exists(checkpoint):
+        print("no checkpoint found; train one first (see training/README.md)", file=sys.stderr)
+        return 2
+    try:
+        tokens, generation = table_for_checkpoint(checkpoint, args.vocab)
+    except TableMismatch as error:
+        print(error, file=sys.stderr)
+        return 2
+    vocab_path = generation.vocab_path() if args.vocab is None else args.vocab
+    packed_path = args.packed or os.path.join(
+        ROOT, "data", "processed", f"train_{generation.name}.npz")
+
+    ckpt = torch.load(checkpoint, weights_only=False)
     cfg = Config(**ckpt["config"])
     model = StoryLM(cfg)
     model.load_state_dict(ckpt["model"])
     model.eval()
-    tokens = json.load(open(args.vocab))["tokens"]
     to_id = {t: i for i, t in enumerate(tokens)}
 
-    print(f"checkpoint {args.checkpoint}")
-    print(f"corpus     {args.corpus}")
+    print(f"checkpoint {os.path.relpath(checkpoint, ROOT)}"
+          f"  [{generation.name} table: {generation.vocab}]")
+    print(f"corpus     {os.path.relpath(args.corpus, ROOT)}")
+    print(f"packed     {os.path.relpath(packed_path, ROOT)}")
 
     # ---- 1. overfitting gap ------------------------------------------------
-    packed = np.load(args.packed)
+    packed = np.load(packed_path)
     ids = torch.from_numpy(packed["ids"].astype(np.int64))
     mask = torch.from_numpy(packed["mask"])
     count = len(ids)
@@ -167,19 +183,19 @@ def main():
     print(f"\n   corpus: {len(stories)} stories, {len(line_id)} distinct lines")
 
     # ---- generate stories --------------------------------------------------
-    proper = {e["id"]: {e["story_name"].lower()} | {f.lower() for f in e["friends"]}
-              for e in json.load(open("data/series.json"))}
+    series = {e["id"]: e for e in series_of(generation.series_path())}
+    proper = {sid: {e["story_name"].lower()} | {f.lower() for f in e["friends"]}
+              for sid, e in series.items()}
     themes = themes_from_vocab(tokens)[: max(1, args.stories // (5 * args.repeats))]
     gen = []
-    for world, place in WORLDS:
+    for sid, entry in series.items():
         for theme in themes:
             for _ in range(args.repeats):
-                name = "ONE" if world == "one" else world.upper()
-                prompt = [to_id["<BOS>"], to_id[f"<CHAR={name}>"], to_id["<MODE=BEDTIME>"],
-                          to_id[f"<PLACE={place}>"], to_id[f"<THEME={theme}>"]]
+                prompt = [to_id["<BOS>"], to_id[entry["token"]], to_id["<MODE=BEDTIME>"],
+                          to_id[f"<PLACE={entry['places'][0].upper()}>"], to_id[f"<THEME={theme}>"]]
                 out = generate_story(model, prompt, tokens, cfg.ctx,
                                      temperature=args.temperature, top_k=40)
-                gen.append((world, theme, decode_lines(out, tokens, proper[SERIES_IDS.get(world, world)])))
+                gen.append((sid, theme, decode_lines(out, tokens, proper[sid])))
 
     # ---- 2. verbatim copying ----------------------------------------------
     runs, line_hits, line_total = [], 0, 0

@@ -14,7 +14,6 @@ Exits non-zero on any mismatch.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import time
@@ -32,16 +31,23 @@ except (ImportError, ValueError):
         from model import Config, KVBuf, StoryLM, generate_story
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from storylm.vocab import (TableMismatch, default_checkpoint, require,
+                           table_for_checkpoint)
+
 PROMPT = ["<CHAR=BLUEY>", "<MODE=BEDTIME>", "<PLACE=BEDROOM>", "<THEME=HELP>"]
 
 
 def load(checkpoint, vocab):
-    ckpt = torch.load(checkpoint, weights_only=False)
-    model = StoryLM(Config(**ckpt["config"]))
-    model.load_state_dict(ckpt["model"])
+    payload = torch.load(checkpoint, weights_only=False)
+    model = StoryLM(Config(**payload["config"]))
+    model.load_state_dict(payload["model"])
     model.eval()
-    tokens = json.load(open(vocab))["tokens"]
-    return model, tokens
+    tokens, generation = table_for_checkpoint(checkpoint, vocab)
+    require(tokens, ["<BOS>"] + PROMPT, f"{generation.name} table")
+    return model, tokens, generation
 
 
 def logits_match(model, tokens, tol=1e-4):
@@ -96,12 +102,23 @@ def greedy_equivalence(model, tokens, stories=3):
 
 def main():
     ap = argparse.ArgumentParser()
-    default_ckpt = os.path.join(ROOT, "checkpoints/embedded_big.pt") if os.path.exists(os.path.join(ROOT, "checkpoints/embedded_big.pt")) else os.path.join(ROOT, "artifacts/checkpoints/embedded_big.pt")
-    ap.add_argument("--checkpoint", default=default_ckpt)
-    ap.add_argument("--vocab", default=os.path.join(ROOT, "data/vocab.json"))
+    ap.add_argument("--checkpoint", default=None,
+                    help="checkpoint to test (default: the newest in checkpoints/)")
+    ap.add_argument("--vocab", default=None,
+                    help="token table (default: the one the checkpoint was trained on)")
     args = ap.parse_args()
 
-    model, tokens = load(args.checkpoint, args.vocab)
+    checkpoint = args.checkpoint or default_checkpoint()
+    if checkpoint is None or not os.path.exists(checkpoint):
+        print("no checkpoint found; train one first (see training/README.md)", file=sys.stderr)
+        return 2
+    try:
+        model, tokens, generation = load(checkpoint, args.vocab)
+    except TableMismatch as error:
+        print(error, file=sys.stderr)
+        return 2
+    print(f"checkpoint {os.path.relpath(checkpoint, ROOT)}"
+          f"  [{generation.name} table: {generation.vocab}, {len(tokens)} ids]")
     to_id = {t: i for i, t in enumerate(tokens)}
     prompt = [to_id["<BOS>"]] + [to_id[t] for t in PROMPT]
 

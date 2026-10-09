@@ -186,12 +186,19 @@ def validate(series_id: str, mode: str, place: str, theme: str,
 # ---------------------------------------------------------------------------
 
 def _read_payload(stream) -> List[str]:
-    """Parse '<LINE>text</LINE>' lines from a story payload."""
-    lines = []
-    for raw in stream:
-        if "<LINE>" in raw and "</LINE>" in raw:
-            lines.append(raw[raw.index("<LINE>") + len("<LINE>"):raw.index("</LINE>")])
-    return lines
+    """Parse '<LINE>text</LINE>' lines from a story payload.
+
+    The engine's protocol wraps every line; a plain story (one line per stdin
+    line, as in the usage examples) is accepted too, so the CLI can be pointed at
+    a draft file without wrapping it first.
+    """
+    raw_lines = [raw.rstrip("\n") for raw in stream]
+    lines = [raw[raw.index("<LINE>") + len("<LINE>"):raw.index("</LINE>")]
+             for raw in raw_lines if "<LINE>" in raw and "</LINE>" in raw]
+    if lines:
+        return lines
+    return [raw.strip() for raw in raw_lines
+            if raw.strip() and not raw.strip().startswith("#")]
 
 
 def _engine_vocabulary_size() -> Optional[int]:

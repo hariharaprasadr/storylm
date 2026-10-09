@@ -12,6 +12,7 @@ Output: a ``.npz`` with
   ids   int32 [n, ctx]  token ids, padded with <PAD>
   mask  bool  [n, ctx]  true where the loss applies (story tokens only)
   meta  int32 [3]       vocab_count, ctx, n_stories
+  vocab_file  str       the table the ids index into, so nothing has to guess
 """
 from __future__ import annotations
 
@@ -87,6 +88,10 @@ def main():
         ids=packed_ids,
         mask=packed_mask,
         meta=np.array([len(tokens), args.ctx, len(rows)], dtype=np.int32),
+        # Which table the ids index into. Without it, a 3,589-id set cannot be
+        # paired with confidence (v2 and v3 share that width), and training or
+        # evaluation would read the wrong word.
+        vocab_file=np.array(args.vocab),
     )
     lengths = packed_mask.sum(axis=1)
     print(f"stories     {len(rows)}")

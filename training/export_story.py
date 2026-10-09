@@ -16,7 +16,6 @@ import json
 import os
 import sys
 
-import numpy as np
 import torch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,9 +23,8 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from storylm.model import Config, StoryLM
-
-MODES = ["adventure", "bedtime", "funny", "kindness"]
-THEMES = ["help", "share", "brave", "try"]
+from storylm.vocab import (TableMismatch, control_values, default_checkpoint,
+                           series_of, table_for_checkpoint)
 
 
 def b64_f16(tensor):
@@ -36,15 +34,29 @@ def b64_f16(tensor):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", default=os.path.join(ROOT, "checkpoints/embedded_big.pt"))
+    ap.add_argument("--checkpoint", default=None,
+                    help="checkpoint to export (default: the newest in checkpoints/)")
+    ap.add_argument("--vocab", default=None,
+                    help="token table (default: the one the checkpoint was trained on)")
     ap.add_argument("--out", default=os.path.join(ROOT, "web/story_data.js"))
     args = ap.parse_args()
 
-    ckpt = torch.load(args.checkpoint, weights_only=False, map_location="cpu")
+    checkpoint = args.checkpoint or default_checkpoint()
+    if checkpoint is None or not os.path.exists(checkpoint):
+        print("no checkpoint found; train one first (see training/README.md)", file=sys.stderr)
+        return 2
+    try:
+        tokens, generation = table_for_checkpoint(checkpoint, args.vocab)
+    except TableMismatch as error:
+        print(error, file=sys.stderr)
+        return 2
+
+    ckpt = torch.load(checkpoint, weights_only=False, map_location="cpu")
     cfg = Config(**ckpt["config"])
     model = StoryLM(cfg)
     model.load_state_dict(ckpt["model"])
-    print(f"loaded {args.checkpoint}: {sum(p.numel() for p in model.parameters()):,} params")
+    print(f"loaded {checkpoint}: {sum(p.numel() for p in model.parameters()):,} params"
+          f"  [{generation.name} table: {generation.vocab}]")
 
     weights = {}
     seen = set()
@@ -55,8 +67,10 @@ def main():
         seen.add(name)
     print(f"exported {len(weights)} tensors")
 
-    vocab = json.load(open(os.path.join(ROOT, "data/vocab.json")))["tokens"]
-    series = json.load(open(os.path.join(ROOT, "data/series.json")))
+    vocab = tokens
+    series = series_of(generation.series_path())
+    MODES = control_values(vocab, "MODE")
+    THEMES = control_values(vocab, "THEME")
     worlds = [
         {
             "id": entry["id"],
@@ -72,7 +86,7 @@ def main():
     ]
 
     payload = {
-        "checkpoint": os.path.relpath(args.checkpoint, ROOT),
+        "checkpoint": os.path.relpath(checkpoint, ROOT),
         "config": {
             "vocab": cfg.vocab, "ctx": cfg.ctx, "layers": cfg.layers,
             "d_model": cfg.d_model, "heads": cfg.heads,
@@ -82,6 +96,7 @@ def main():
                      "max_lines": 26, "resample_tries": 3, "max_new_tokens": 80},
         "vocab": vocab,
         "worlds": worlds,
+        "modes": MODES,
         "themes": THEMES,
         "weights": weights,
     }

@@ -30,6 +30,9 @@ ENV/
 # Modal / cloud training downloads (regenerate via training/README.md)
 artifacts/
 
+# Local smoke-run output (`make train`), never a shipped checkpoint
+checkpoints/smoke.pt
+
 # large raw corpora (~200 MB each, exceeds GitHub's 100 MB file limit):
 # regenerate with `make corpus`, or rebuild from the committed shards with
 # `make corpus-join`. The shards themselves (data/processed/corpus/*.jsonl.gz,

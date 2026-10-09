@@ -27,6 +27,8 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from storylm.model import Config, StoryLM, decode_lines, generate_story
+from storylm.vocab import (TableMismatch, control_values, default_checkpoint,
+                           series_of, table_for_checkpoint)
 
 WORLDS = [
     ("bluey", "BEDROOM"), ("gabby", "BEDROOM"), ("one", "PLAYROOM"),
@@ -36,7 +38,6 @@ PLACE_IDS = {"bluey": "bedroom", "gabby": "bedroom", "one": "playroom",
              "amelia": "kitchen", "junie": "bedroom"}
 SERIES_IDS = {"bluey": "bluey", "gabby": "gabby", "one": "numberblocks",
               "amelia": "amelia", "junie": "junie"}
-THEMES = ["HELP", "SHARE", "BRAVE", "TRY"]
 
 
 def words_of(line):
@@ -44,7 +45,8 @@ def words_of(line):
     return " ".join(re.findall(r"[a-z]+", line.lower()))
 
 
-def canonicalize(lines, series_id, place_id, theme, mode="bedtime"):
+def canonicalize(lines, series_id, place_id, theme, mode="bedtime",
+                 vocab_path="data/vocab.json"):
     """Run the engine's canonicaliser over a draft story.
 
     The inventory must be built for the *same prompt* the story came from: a
@@ -55,13 +57,17 @@ def canonicalize(lines, series_id, place_id, theme, mode="bedtime"):
     Python validator (`storylm/validator.py`) otherwise.
     """
     from storylm.validator import run_canonicalize
-    return run_canonicalize(series_id, mode, place_id, theme, lines)
+    return run_canonicalize(series_id, mode, place_id, theme, lines, vocab_path)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", default="checkpoints/embedded.pt")
-    ap.add_argument("--vocab", default="data/vocab.json")
+    ap.add_argument("--checkpoint", default=None,
+                    help="checkpoint to sample (default: the newest in checkpoints/)")
+    ap.add_argument("--vocab", default=None,
+                    help="token table (default: the one the checkpoint was trained on)")
+    ap.add_argument("--corpus", default="data/processed/train.jsonl",
+                    help="corpus for the word-level fidelity count")
     ap.add_argument("--per-world", type=int, default=1)
     ap.add_argument("--repeats", type=int, default=1,
                     help="stories per prompt, for a tighter estimate")
@@ -72,31 +78,46 @@ def main():
 
     torch.manual_seed(args.seed)  # reproducible stories for debugging
 
-    ckpt = torch.load(args.checkpoint, weights_only=False)
+    checkpoint = args.checkpoint or default_checkpoint()
+    if checkpoint is None or not os.path.exists(checkpoint):
+        print("no checkpoint found; train one first (see training/README.md)", file=sys.stderr)
+        return 2
+
+    try:
+        tokens, generation = table_for_checkpoint(checkpoint, args.vocab)
+    except TableMismatch as error:
+        print(error, file=sys.stderr)
+        return 2
+    vocab_path = generation.vocab_path() if args.vocab is None else args.vocab
+
+    ckpt = torch.load(checkpoint, weights_only=False)
     cfg = Config(**ckpt["config"])
     model = StoryLM(cfg)
     model.load_state_dict(ckpt["model"])
     model.eval()
 
-    tokens = json.load(open(args.vocab))["tokens"]
     to_id = {token: i for i, token in enumerate(tokens)}
-    series = {entry["id"]: entry for entry in json.load(open("data/series.json"))}
+    series = {entry["id"]: entry for entry in series_of(generation.series_path())}
+    themes = [t.upper() for t in control_values(tokens, "THEME")]
+    print(f"# {os.path.relpath(checkpoint, ROOT)}  [{generation.name} table "
+          f"{generation.vocab}, {len(themes)} themes]")
 
     corpus_lines = set()
-    with open("data/processed/train.jsonl") as handle:
+    with open(args.corpus) as handle:
         for row in map(json.loads, handle):
             for line in row["lines"]:
                 corpus_lines.add(words_of(line))
 
     passed = total = matched_lines = total_lines = unmatched_lines = 0
     for world, place_token in WORLDS:
-        for theme in THEMES[: args.per_world]:
+        for theme in themes[: args.per_world]:
           for _repeat in range(args.repeats):
                 entry = series[SERIES_IDS[world]]
-                name = "ONE" if world == "one" else world.upper()
-                prompt = f"<CHAR={name}><MODE=BEDTIME><PLACE={place_token}><THEME={theme}>"
+                char_token = entry["token"]
+                prompt = (f"{char_token}<MODE=BEDTIME>"
+                          f"<PLACE={place_token}><THEME={theme}>")
                 ids = [to_id["<BOS>"]] + [to_id[t] for t in
-                                          (f"<CHAR={name}>", "<MODE=BEDTIME>",
+                                          (char_token, "<MODE=BEDTIME>",
                                            f"<PLACE={place_token}>", f"<THEME={theme}>")]
                 out = generate_story(model, ids, tokens, cfg.ctx,
                                      temperature=args.temperature, top_k=40)
@@ -104,7 +125,8 @@ def main():
                                      {f.lower() for f in entry["friends"]})
                 total += 1
 
-                lines, stats = canonicalize(draft, SERIES_IDS[world], PLACE_IDS[world], theme.lower())
+                lines, stats = canonicalize(draft, SERIES_IDS[world], PLACE_IDS[world], theme.lower(),
+                                            vocab_path=vocab_path)
                 matched = sum(1 for line in lines if words_of(line) in corpus_lines)
                 unmatched = int(stats.split("unmatched ")[-1].split(" ")[0])
                 matched_lines += matched
@@ -113,7 +135,7 @@ def main():
 
                 from storylm.validator import run_check
                 verdict_text = run_check(SERIES_IDS[world], "bedtime", PLACE_IDS[world],
-                                         theme.lower(), lines, lines)
+                                         theme.lower(), lines, lines, vocab_path=vocab_path)
                 verdict_ok = verdict_text.startswith("ok")
                 passed += verdict_ok
 

@@ -1,4 +1,8 @@
-"""StoryLM: 1.67M parameter Tiny Language Model for edge & embedded devices."""
+"""StoryLM: a ~2M parameter Tiny Language Model for edge & embedded devices.
+
+The shipped generation is v4 (2,024,192 params, 3,509-id closed vocabulary);
+`storylm.vocab` pairs every checkpoint with the token table it was trained on.
+"""
 
 from .model import (
     Config as StoryLMConfig,

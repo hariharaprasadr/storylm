@@ -35,6 +35,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from storylm.vocab import (TableMismatch, save_checkpoint, series_of,
+                           table_for_packed)
+
 try:
     from storylm.model import Config, StoryLM, decode_lines, generate_story
 except ImportError:
@@ -121,19 +124,23 @@ def train_from_packed(ids_np, mask_np, vocab, ctx, *, steps, batch=16, lr=3e-4,
     return model.cpu(), history
 
 
-def sample_story(model, tokens, ctx, temperature=0.8, top_k=40, proper_names=None):
+def sample_story(model, tokens, ctx, temperature=0.8, top_k=40, proper_names=None,
+                 vocab_path="data/vocab.json", prompt_tokens=None,
+                 series_id="bluey", place="bedroom", theme="help"):
     """One story through the device's full path: generate, canonicalise, show."""
     to_id = {token: i for i, token in enumerate(tokens)}
-    prompt_ids = [to_id["<BOS>"]] + [to_id[t] for t in PROMPT]
+    prompt_ids = [to_id["<BOS>"]] + [to_id[t] for t in (prompt_tokens or PROMPT)]
     ids = generate_story(model, prompt_ids, tokens, ctx, temperature=temperature, top_k=top_k)
     lines = decode_lines(ids, tokens, proper_names or set())
-    return canonicalize(lines, "bluey", "bedroom", "help")
+    return canonicalize(lines, series_id, place, theme, vocab_path=vocab_path)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="data/processed/train.npz")
-    ap.add_argument("--vocab", default="data/vocab.json")
+    ap.add_argument("--data", default="data/processed/train_v4.npz",
+                    help="packed corpus; its own table is used unless --vocab overrides")
+    ap.add_argument("--vocab", default=None,
+                    help="token table (default: the one the .npz was packed with)")
     ap.add_argument("--steps", type=int, default=300)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--lr", type=float, default=3e-4)
@@ -146,7 +153,9 @@ def main():
     ap.add_argument("--eval-batch", type=int, default=32,
                     help="rows per validation chunk (keeps the logits tensor small)")
     ap.add_argument("--device", default="cpu")
-    ap.add_argument("--checkpoint", default="checkpoints/embedded")
+    ap.add_argument("--checkpoint", default="checkpoints/smoke",
+                    help="output path, without .pt; smoke runs never overwrite a "
+                         "shipped checkpoint")
     ap.add_argument("--allow-cpu", action="store_true",
                     help="override the policy: real training runs on Modal, not on CPU")
     args = ap.parse_args()
@@ -160,7 +169,11 @@ def main():
         )
 
     ids_np, mask_np, vocab, ctx, count = load_packed(args.data)
-    tokens = json.load(open(args.vocab))["tokens"]
+    try:
+        tokens, generation = table_for_packed(args.data, args.vocab)
+    except TableMismatch as error:
+        ap.error(str(error))
+    vocab_path = generation.vocab_path() if args.vocab is None else args.vocab
 
     model, _ = train_from_packed(
         ids_np, mask_np, vocab, ctx, steps=args.steps, batch=args.batch, lr=args.lr,
@@ -169,20 +182,27 @@ def main():
     )
 
     os.makedirs(os.path.dirname(args.checkpoint), exist_ok=True)
-    torch.save({"config": model.cfg.__dict__, "model": model.state_dict()},
-               args.checkpoint + ".pt")
-    print(f"saved {args.checkpoint}.pt")
+    save_checkpoint(args.checkpoint + ".pt", model.cfg.__dict__, model.state_dict(),
+                    vocab_path=vocab_path, data_path=args.data)
+    print(f"saved {args.checkpoint}.pt  [{generation.name} table: "
+          f"{os.path.relpath(vocab_path, ROOT)}]")
 
-    series_entry = next(e for e in json.load(open("data/series.json")) if e["id"] == "bluey")
-    proper_names = {series_entry["story_name"].lower()} | {f.lower() for f in series_entry["friends"]}
-    lines, stats = sample_story(model, tokens, ctx, proper_names=proper_names)
+    entry = next(e for e in series_of(generation.series_path()) if e["id"] == "bluey")
+    proper_names = {entry["story_name"].lower()} | {f.lower() for f in entry["friends"]}
+    lines, stats = sample_story(model, tokens, ctx, proper_names=proper_names,
+                                vocab_path=vocab_path,
+                                prompt_tokens=[entry["token"], "<MODE=BEDTIME>",
+                                               f"<PLACE={entry['places'][0].upper()}>",
+                                               "<THEME=HELP>"],
+                                series_id=entry["id"], place=entry["places"][0], theme="help")
     print("--- sample (after the engine's canonicaliser) ---")
     print("    " + stats)
     for line in lines:
         print(line)
 
     from storylm.validator import run_check
-    print("validator:", run_check("bluey", "bedtime", "bedroom", "help", lines, lines))
+    print("validator:", run_check(entry["id"], "bedtime", entry["places"][0], "help",
+                                  lines, lines, vocab_path=vocab_path))
 
 
 if __name__ == "__main__":

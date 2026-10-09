@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 @dataclass
 class Config:
-    vocab: int = 752
+    vocab: int = 3509  # the v4 table (data/vocab.json); only a default for ad-hoc tests
     ctx: int = 384
     layers: int = 8
     d_model: int = 128

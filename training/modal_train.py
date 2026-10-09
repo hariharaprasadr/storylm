@@ -7,10 +7,10 @@ thousands of steps.
     set -a; . .env.local; set +a                 # MODAL_TOKEN_ID / MODAL_TOKEN_SECRET
     .venv/bin/modal volume create tinystory-data
     .venv/bin/modal volume create tinystory-ckpts
-    .venv/bin/modal volume put tinystory-data data/processed/train_v2.npz /train_v2.npz
-    .venv/bin/modal volume put tinystory-data data/vocab_v2.json /vocab_v2.json
-    .venv/bin/modal run training/modal_train.py --steps 5400 --batch 64 --name embedded_v2
-    .venv/bin/modal volume get tinystory-ckpts embedded_v2.pt checkpoints/embedded_v2.pt
+    .venv/bin/modal volume put tinystory-data data/processed/train_v4.npz /train_v4.npz
+    .venv/bin/modal volume put tinystory-data data/vocab_v4.json /vocab_v4.json
+    .venv/bin/modal run training/modal_train.py --steps 5400 --batch 64 --name embedded_v4
+    .venv/bin/modal volume get tinystory-ckpts embedded_v4.pt checkpoints/embedded_v4.pt
 
 `make train-modal` runs exactly that sequence (volumes, upload, run, download).
 
@@ -48,8 +48,8 @@ app = modal.App("tinystory-lm")
 )
 def train(steps: int = 5400, batch: int = 64, lr: float = 3e-4, warmup: int = 300,
           eval_every: int = 500, eval_batch: int = 64, seed: int = 0,
-          name: str = "embedded_v2",
-          data_file: str = "train_v2.npz", vocab_file: str = "vocab_v2.json") -> dict:
+          name: str = "embedded_v4",
+          data_file: str = "train_v4.npz", vocab_file: str = "vocab_v4.json") -> dict:
     import sys
 
     import torch
@@ -58,9 +58,14 @@ def train(steps: int = 5400, batch: int = 64, lr: float = 3e-4, warmup: int = 30
     sys.path.insert(0, "/root")
     sys.path.insert(0, "/root/training")
     from storylm.model import decode_lines, generate_story
+    from storylm.vocab import save_checkpoint
     from train_model import load_packed, train_from_packed
 
     ids, mask, vocab, ctx, count = load_packed(f"/data/{data_file}")
+    tokens = json.load(open(f"/data/{vocab_file}"))["tokens"]
+    if len(tokens) != vocab:
+        raise SystemExit(f"{data_file} was packed with a {vocab}-id table but "
+                         f"{vocab_file} has {len(tokens)} ids")
     print(f"corpus {count} stories, vocab {vocab}, ctx {ctx}, device {torch.cuda.get_device_name()}")
 
     model, history = train_from_packed(
@@ -68,11 +73,12 @@ def train(steps: int = 5400, batch: int = 64, lr: float = 3e-4, warmup: int = 30
         eval_every=eval_every, eval_batch=eval_batch, seed=seed, device="cuda", log=print,
     )
 
-    torch.save({"config": model.cfg.__dict__, "model": model.state_dict()}, f"/ckpt/{name}.pt")
+    # The checkpoint records its own table, so nothing downstream has to guess.
+    save_checkpoint(f"/ckpt/{name}.pt", model.cfg.__dict__, model.state_dict(),
+                    vocab_path=f"data/{vocab_file}", data_path=f"data/processed/{data_file}")
     modal.Volume.from_name(CKPT_VOLUME).commit()
 
     # Raw sample, for a sanity check only: canonicalisation needs the engine.
-    tokens = json.load(open(f"/data/{vocab_file}"))["tokens"]
     to_id = {t: i for i, t in enumerate(tokens)}
     prompt = ["<BOS>", "<CHAR=BLUEY>", "<MODE=BEDTIME>", "<PLACE=BEDROOM>", "<THEME=HELP>"]
     out = generate_story(model, [to_id[t] for t in prompt], tokens, ctx)
@@ -85,8 +91,8 @@ def train(steps: int = 5400, batch: int = 64, lr: float = 3e-4, warmup: int = 30
 
 
 @app.local_entrypoint()
-def main(steps: int = 5400, batch: int = 64, name: str = "embedded_v2",
-         data_file: str = "train_v2.npz", vocab_file: str = "vocab_v2.json"):
+def main(steps: int = 5400, batch: int = 64, name: str = "embedded_v4",
+         data_file: str = "train_v4.npz", vocab_file: str = "vocab_v4.json"):
     result = train.remote(steps=steps, batch=batch, name=name,
                           data_file=data_file, vocab_file=vocab_file)
     print(json.dumps(result["params"], indent=2))
