@@ -424,10 +424,20 @@
     .chip-pct { opacity: 0.85; }
     /* provenance block */
     #provenance { padding: 28px 0 70px; border-top: 1px solid var(--line-soft); }
-    .prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+    /* One block per row: side-by-side columns squeezed the prose into narrow
+       ribbons on a desktop and left the rest of the width empty. */
+    /* minmax(0, 1fr) + min-width: 0 lets the blocks shrink on a phone: without it a
+       grid item keeps its content's minimum width and a wide table pushes the page
+       sideways instead of scrolling inside .table-scroll. */
+    .prov-grid, .prov-refs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
+    .prov-grid > div, .prov-refs > div { min-width: 0; }
     .prov-grid h3, .prov-refs h3 { font-family: var(--font-display); font-size: 1.05rem; margin: 0 0 8px; }
-    .prov-grid p, .prov-refs p { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin: 0 0 8px; }
-    .prov-refs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; margin-top: 24px; }
+    .prov-grid p, .prov-refs p { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin: 0 0 8px; max-width: 92ch; }
+    .table-scroll { max-width: 92ch; }
+    /* a hairline between the stacked blocks, so they read as separate entries */
+    .prov-grid > div, .prov-refs > div { padding-top: 22px; border-top: 1px solid var(--line-soft); }
+    .prov-grid > div:first-child, .prov-refs > div:first-child { padding-top: 0; border-top: none; }
+    .prov-refs { margin-top: 26px; }
     table.lens-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
     table.lens-table th, table.lens-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); }
     table.lens-table th { color: var(--muted); font-weight: 500; }
@@ -592,9 +602,9 @@
     </section>
 
     <section id="provenance">
-      <div class="container" id="provenanceBody">
+      <div class="container">
         <span class="badge">Provenance &amp; cross-checks</span>
-        <div id="provenance"></div>
+        <div id="provenanceBody"></div>
       </div>
     </section>
 
@@ -1342,7 +1352,8 @@
 
       // ---------- provenance ----------
       function renderProvenance() {
-        const host = byId("provenance");
+        const host = byId("provenanceBody");
+        if (!host) return;
         const toys = T.toy;
         const counter = T.dims_0_4_counterexample;
         const lens = T.real_model.logit_lens;
