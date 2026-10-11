@@ -739,6 +739,17 @@
       // was copied from (row index and embedding row are different numbers — the
       // prompt's tokens live on rows 1-5 of the table while X₀ counts 0-4), and a
       // cell of the table itself describes that row.
+      // For matrices that are an input to a step: no operation to show, so describe the cell.
+      function inspectPlainCell(m, row, col, value) {
+        clearHighlights();
+        mark(`cell_${m.id}_${row}_${col}`, "active-cell");
+        showInspect(`${m.label} [${m.rowLabels[row]}, ${m.colLabels[col]}]`,
+          tagRow("Cell", `<strong>${num(value, 4)}</strong>`)
+          + tagRow("Shape", `${m.shape} — row ${row}, column ${col}`),
+          `= ${num(value, 3)}`,
+          `${m.label} feeds this step; the arithmetic happens in the matrices to its right.`);
+      }
+
       function inspectEmbedding(row, col, ids, fromTable) {
         clearHighlights();
         if (fromTable) {
@@ -956,8 +967,12 @@
             td.id = `cell_${m.id}_${r}_${c}`;
             td.tabIndex = 0;
             td.textContent = num(v, m.digits === undefined ? 2 : m.digits);
-            const inspector = () => m.inspect(r, c);
-            // Click or tab only: hovering must not run an inspection.
+            // Click or tab only: hovering must not run an inspection. Input matrices
+            // have no arithmetic of their own, so they describe the cell instead of
+            // throwing when someone clicks them.
+            const inspector = typeof m.inspect === "function"
+              ? () => m.inspect(r, c)
+              : () => inspectPlainCell(m, r, c, v);
             td.addEventListener("focus", inspector);
             td.addEventListener("click", inspector);
             tr.append(td);
