@@ -1,4 +1,4 @@
-.PHONY: help story test web info train train-modal audit corpus corpus-join vocab clean
+.PHONY: help story test web info train train-modal audit corpus corpus-join vocab matrix-toy clean
 
 # Use the project venv when it exists; "python" is not on PATH everywhere.
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || (command -v python3 || echo python))
@@ -17,6 +17,7 @@ help:
 	@echo "  make train   - Smoke training run, local, plumbing only (300 steps)"
 	@echo "  make train-modal - Real training on a Modal T4 (volumes, run, download)"
 	@echo "  make audit   - Overfitting / memorisation audit of a checkpoint"
+	@echo "  make matrix-toy - Regenerate the web matrix walkthrough's 4-dim toy block"
 	@echo "  make clean   - Clean cache files"
 
 # The current generation: data/vocab.json (3,509 ids) + data/processed/train_v4.npz.
@@ -64,6 +65,12 @@ train-modal:
 
 audit:
 	$(PY) training/memorisation.py
+
+# The matrix walkthrough page runs a 4-dimension slice of the shipped checkpoint.
+# Regenerate it (and its reference numbers) after training a new model.
+matrix-toy:
+	$(PY) training/export_matrix_toy.py --search
+	$(PY) training/export_matrix_toy.py
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
