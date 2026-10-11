@@ -800,18 +800,28 @@
           `${labels[0]} → ${labels[1]}: divide by the root mean square, then scale by the layer's learned gain (nn.RMSNorm, ε = ${EPS}).`);
       }
 
-      function inspectDot(row, col, ids, A, B, out, labelOut, labelB) {
+      // A linear layer stores its weight as [out, in], so output column `col` is the
+      // dot product of the input row with ROW `col` of the weight matrix — that is
+      // the `x @ Wᵀ` the model actually computes. Summing with the wrong orientation
+      // is exactly what makes an inspector disagree with the matrix it explains.
+      function inspectDot(row, col, ids, A, Wmat, out, labelOut, labelW) {
         clearHighlights();
         mark(`row_${ids.row}_${row}`, "highlighted-row");
-        B.forEach((_, i) => mark(`cell_${ids.col}_${i}_${col}`, "highlighted-col"));
+        mark(`row_${ids.col}_${col}`, "highlighted-row");
         mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
         let sum = 0;
-        for (let k = 0; k < A[row].length; k++) sum += A[row][k] * B[k][col];
+        // activations to 3 decimals, weights to 4: the weights are ~0.02, and three
+        // decimals there would not add back up to the sum by hand
+        const terms = A[row].map((v, k) => {
+          sum += v * Wmat[col][k];
+          return `${num(v, 3)}×${num(Wmat[col][k], 4)}`;
+        });
         showInspect(`${labelOut} (row ${row}, column ${col})`,
-          tagRow("Dot product", A[row].map((v, k) => `${num(v, 3)}×${num(B[k][col], 3)}`).join(" + "))
-          + tagRow("Sum", `<strong>${num(sum, 4)}</strong>`),
+          tagRow("Dot product", terms.join(" + "))
+          + tagRow("Sum", `<strong>${num(sum, 4)}</strong>`)
+          + tagRow("Stored in the matrix", `kept to three decimals: <strong>${num(out, 3)}</strong>`),
           `= ${num(out, 3)}`,
-          `${A[row].length}-term dot product: one row of the left matrix times one column of ${labelB}.`);
+          `Row ${row} of the input times row ${col} of ${labelW} (weights are stored [out, in], so the layer computes x @ ${labelW}ᵀ). Both rows are highlighted above.`);
       }
 
       function inspectRope(row, col, ids) {
@@ -1055,7 +1065,7 @@
           return setBoard([
             { label: "X₀,norm", shape: "5 × 4", data: X0NORM, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"), id: "A", digits: 3 },
             { symbol: "×" },
-            { label: `W_${prefix}`, shape: "4 × 4", data: W[prefix], rowLabels: DIMLABEL("d"), colLabels: DIMLABEL(prefix), id: "B", digits: 3 },
+            { label: `W_${prefix}`, shape: "4 × 4", data: W[prefix], rowLabels: DIMLABEL(prefix), colLabels: DIMLABEL("d"), id: "B", digits: 3 },
             { symbol: "=" },
             { label: `${label} = X₀,norm × W_${prefix}`, shape: "5 × 4", data: out, rowLabels: PROMPT.map((p) => p.token),
               colLabels: DIMLABEL(prefix), id: "out", digits: 3,
@@ -1063,7 +1073,7 @@
           ]);
         },
         "Three projections, one per role",
-        `The real block computes all three in one fused 384 × 128 matrix and then splits by head; here they are separate 4 × 4 matrices so each column has a name. Switch the subtab to walk K and V the same way.`);
+        `A linear layer stores its weight as [out, in] — row ${"q"}0 of W_q produces output dimension q0 — so output column <em>c</em> is the dot product of the input row with row <em>c</em> of the weight (<code>x @ Wᵀ</code>). The real block computes all three projections in one fused 384 × 128 matrix and then splits by head; here they are three 4 × 4 matrices so every row has a name. Switch the subtab to walk K and V the same way.`);
 
       step("Step 4 · Rotary position embeddings",
         "Position is injected by rotating each head's dimension pairs by an angle proportional to the token's position — a rotation, not an added vector.",
@@ -1105,7 +1115,10 @@
         () => setBoard([
           { label: "Context (heads concatenated)", shape: "5 × 4", data: O, rowLabels: PROMPT.map((p) => p.token),
             colLabels: DIMS.map((d) => `v${d}`), id: "Ocat", digits: 3 },
-          { symbol: "× W_proj →" },
+          { symbol: "×" },
+          { label: "W_proj", shape: "4 × 4", data: W.proj, rowLabels: DIMS.map((d) => `y${d}`),
+            colLabels: DIMS.map((d) => `v${d}`), id: "Wproj", digits: 3 },
+          { symbol: "=" },
           { label: "Y_attn", shape: "5 × 4", data: YATTN, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMS.map((d) => `y${d}`),
             id: "Yattn", digits: 3,
             inspect: (r, c) => inspectDot(r, c, { row: "Ocat", col: "Wproj", cell: "Yattn" }, O, W.proj, YATTN[r][c], "Y_attn", "W_proj") },
