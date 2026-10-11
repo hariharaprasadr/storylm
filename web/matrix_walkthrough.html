@@ -196,6 +196,7 @@
       transition: all 0.12s ease;
       user-select: none;
     }
+    /* Hover only hints that a cell is clickable: it must not run the inspection. */
     table.matrix-table td:hover {
       background: var(--cell-hover);
       border-color: var(--accent);
@@ -541,12 +542,12 @@
         <div class="inspector-card" id="inspectorCard" role="region" aria-label="Interactive cell inspector" style="margin-top: 24px;">
           <div class="inspector-header">
             <span class="inspector-title" id="inspectTitle">Interactive Cell Inspector</span>
-            <span style="font-size: 0.78rem; color: #a49683;">Hover, click or tab onto any cell in the matrices</span>
+            <span style="font-size: 0.78rem; color: #a49683;">Click or tab onto any cell in the matrices</span>
           </div>
           <div class="inspector-steps" id="inspectSteps" aria-live="polite">
             <div class="calc-row">
               <span class="calc-tag">Guide</span>
-              <span class="calc-math" id="inspectFormula">Hover, click or tab onto any cell in the result matrix above to inspect that cell's arithmetic.</span>
+              <span class="calc-math" id="inspectFormula">Click or tab onto any cell in the result matrix above to inspect that cell's arithmetic.</span>
             </div>
           </div>
           <div class="inspector-eval" id="inspectEval" aria-live="polite"></div>
@@ -933,7 +934,7 @@
             td.tabIndex = 0;
             td.textContent = num(v, m.digits === undefined ? 2 : m.digits);
             const inspector = () => m.inspect(r, c);
-            td.addEventListener("mouseenter", inspector);
+            // Click or tab only: hovering must not run an inspection.
             td.addEventListener("focus", inspector);
             td.addEventListener("click", inspector);
             tr.append(td);
@@ -1244,7 +1245,7 @@
         renderProvenance();
         clearHighlights();
         byId("inspectTitle").textContent = "Interactive cell inspector";
-        byId("inspectSteps").innerHTML = tagRow("Guide", "Hover, click or tab onto any cell of the result matrix to see that cell's arithmetic.");
+        byId("inspectSteps").innerHTML = tagRow("Guide", "Click or tab onto any cell of the result matrix to see that cell's arithmetic.");
         byId("inspectEval").textContent = "";
         byId("inspectHint").textContent = `Every number here is computed in your browser from ${REAL.d_model}-dimension weights of the shipped checkpoint, truncated to dimensions ${DIMS.join(", ")}.`;
         history.replaceState(null, "", `#step-${index + 1}`);
