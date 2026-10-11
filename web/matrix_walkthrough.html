@@ -819,7 +819,7 @@
           `Row ${p.row} of W_embed is highlighted — that is the row X₀'s row ${row} was copied from.`);
       }
 
-      function inspectNorm(row, col, ids, src, gain, labels) {
+      function inspectNorm(row, col, ids, src, gain, labels, origin = "") {
         clearHighlights();
         let ss = 0;
         for (const v of src[row]) ss += v * v;
@@ -828,14 +828,16 @@
         const scaled = src[row][col] / r;
         mark(`row_${ids.src}_${row}`, "highlighted-row");
         mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        const labelsOf = ids.srcCols ? ids.srcCols.map((l) => l) : DIMS.map((d) => `d${d}`);
         showInspect(`RMSNorm: ${PROMPT[row].token} (row ${row}, dimension ${DIMS[col]})`,
-          tagRow("1 · Sum of squares", `(${src[row].map((v) => num(v, 3) + "²").join(" + ")}) = ${num(ss, 4)}`)
+          tagRow("0 · Source row", `${labels[0]}[${row}] = ${src[row].map((v, i) => `<span class="v">${num(v, 4)}</span> <span class="muted-small">(${labelsOf[i]})</span>`).join(", ")} — the highlighted row of ${labels[0]} above`)
+          + tagRow("1 · Sum of squares", `(${src[row].map((v) => num(v, 4) + "²").join(" + ")}) = ${num(ss, 4)}`)
           + tagRow("2 · Mean square", `${num(ss, 4)} / ${src[row].length} = ${num(ms, 4)}`)
           + tagRow("3 · RMS", `√(${num(ms, 4)} + ε), ε = ${EPS} → ${num(r, 4)}`)
-          + tagRow("4 · Normalise", `${num(src[row][col], 3)} / ${num(r, 4)} = ${num(scaled, 4)}`)
+          + tagRow("4 · Normalise", `${num(src[row][col], 4)} / ${num(r, 4)} = ${num(scaled, 4)}`)
           + tagRow("5 · Learned gain", `× ${num(gain[col], 3)} = <strong>${num(scaled * gain[col], 4)}</strong>`),
           `= ${num(scaled * gain[col], 4)}`,
-          `${labels[0]} → ${labels[1]}: divide by the root mean square, then scale by the layer's learned gain (nn.RMSNorm, ε = ${EPS}).`);
+          `${labels[0]} → ${labels[1]}: divide by the root mean square, then scale by the layer's learned gain (nn.RMSNorm, ε = ${EPS}).${origin ? " " + origin : ""}`);
       }
 
       // A linear layer stores its weight as [out, in], so output column `col` is the
@@ -946,26 +948,31 @@
           `Row ${row} of A and column ${col} of V_head are highlighted: the context is a weighted average of the five value rows. Each head contributes 2 of the block's 4 dimensions; the two contexts are concatenated for step 6.`);
       }
 
-      function inspectResidual(row, col, ids, A, B, out, labelOut, labelA, labelB) {
+      function inspectResidual(row, col, ids, A, B, out, labelOut, labelA, labelB, origin = "") {
         clearHighlights();
+        if (ids.a) mark(`cell_${ids.a}_${row}_${col}`, "linked-cell");
+        if (ids.b) mark(`cell_${ids.b}_${row}_${col}`, "linked-cell");
         mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
         showInspect(`${labelOut} (row ${row}, dimension ${DIMS[col]})`,
-          tagRow(labelA, num(A[row][col], 4))
-          + tagRow(labelB, num(B[row][col], 4))
+          tagRow(labelA, `<span class="v">${num(A[row][col], 4)}</span> — this cell, dashed in ${labelA}`)
+          + tagRow(labelB, `<span class="v">${num(B[row][col], 4)}</span> — this cell, dashed in ${labelB}`)
           + tagRow("Sum", `<strong>${num(out[row][col], 4)}</strong>`),
           `= ${num(out[row][col], 4)}`,
-          "The residual stream keeps the earlier representation and adds this block's contribution.");
+          `The residual stream keeps the earlier representation and adds this block's contribution.${origin ? " " + origin : ""}`);
       }
 
       function inspectGelu(row, col, ids) {
         clearHighlights();
+        if (ids.src) mark(`cell_${ids.src}_${row}_${col}`, "linked-cell");
+        mark(`row_Wup_${col}`, "highlighted-row");
         mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
-        showInspect(`GELU: ${PROMPT[row].token} (row ${row}, hidden ${col})`,
-          tagRow("Input", `x = ${num(UPPRE[row][col], 4)}`)
-          + tagRow("GELU", `0.5 · x · (1 + erf(x/√2)) — erf to 1.5e-7`)
-          + tagRow("Result", `<strong>${num(GELUED[row][col], 4)}</strong>`),
+        showInspect(`GELU: ${PROMPT[row].token} (row ${row}), hidden feature h${col}`,
+          tagRow("0 · Where x comes from", `the expansion cell ${ids.src ? `<span class="v">${num(UPPRE[row][col], 4)}</span> (dashed)` : `${num(UPPRE[row][col], 4)}`} = row ${row} of X₁,norm · row ${col} of W_up (highlighted)`)
+          + tagRow("1 · Input", `x = ${num(UPPRE[row][col], 4)}`)
+          + tagRow("2 · GELU", `0.5 · x · (1 + erf(x/√2)) — erf to 1.5e-7`)
+          + tagRow("3 · Result", `<strong>${num(GELUED[row][col], 4)}</strong>`),
           `= ${num(GELUED[row][col], 4)}`,
-          "storylm/model.py calls F.gelu, which is this erf form — not the tanh approximation.");
+          `storylm/model.py calls F.gelu, which is this erf form — not the tanh approximation. Feature h${col} is produced by row ${col} of W_up; click any cell of the expansion matrix to see that dot product.`);
       }
 
       function inspectLogit(col, ids) {
@@ -1129,7 +1136,8 @@
           { symbol: "→ RMSNorm →" },
           { label: "X₀,norm", shape: "5 × 4", data: X0NORM, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
             id: "X0norm", digits: 3,
-            inspect: (r, c) => inspectNorm(r, c, { src: "X0raw", cell: "X0norm" }, X0, W.norm_attn, ["X₀", "X₀,norm"]) },
+            inspect: (r, c) => inspectNorm(r, c, { src: "X0raw", cell: "X0norm" }, X0, W.norm_attn, ["X₀", "X₀,norm"],
+              "X₀ is the embedding lookup from step 1 — the same row is highlighted there.") },
         ]),
         "RMSNorm: no mean subtraction",
         `LayerNorm centres by the mean and scales by the standard deviation; RMSNorm only divides by √(mean(x²) + ε) and then multiplies by a learned gain per dimension. The gain here is ${num(W.norm_attn[0], 3)} … ${num(W.norm_attn[3], 3)} and ε = ${EPS}, exactly as <code>nn.RMSNorm</code> is configured in storylm/model.py.`);
@@ -1220,31 +1228,61 @@
           { label: "Y_attn", shape: "5 × 4", data: YATTN, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMS.map((d) => `y${d}`),
             id: "Yattn", digits: 3,
             inspect: (r, c) => inspectDot(r, c, { row: "Ocat", col: "Wproj", cell: "Yattn" }, O, W.proj, YATTN[r][c], "Y_attn", "W_proj") },
-          { symbol: "+ X₀ =" },
+          { symbol: "=" },
+          { label: "Then + X₀:", shape: "5 × 4", data: X0, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
+            id: "X0res", digits: 3 },
+          { symbol: "→" },
           { label: "X₁ = X₀ + Y_attn", shape: "5 × 4", data: X1, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
             id: "X1", digits: 3,
-            inspect: (r, c) => inspectResidual(r, c, { cell: "X1" }, X0, YATTN, X1, "X₁", "X₀", "Y_attn") },
+            inspect: (r, c) => inspectResidual(r, c, { cell: "X1", a: "X0res", b: "Yattn" }, X0, YATTN, X1, "X₁", "X₀", "Y_attn",
+              "X₀ is the block's input (step 1's embeddings), Y_attn the projection beside it.") },
         ]),
         "The residual highway",
         `Attention <em>modifies</em> the stream rather than replacing it: X₁ = X₀ + Attention(X₀). In the real model each of the eight blocks does this, which is why the original token identity is still visible in the logit lens after layer 5 (see the note at the bottom).`);
 
       step("Step 7 · Feed-forward network",
         "A second RMSNorm, a 4 → 8 expansion, GELU, an 8 → 4 contraction, and a second residual add.",
-        () => setBoard([
-          { label: "X₁,norm", shape: "5 × 4", data: X1NORM, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
-            id: "X1norm", digits: 3,
-            inspect: (r, c) => inspectNorm(r, c, { src: "X1normsrc", cell: "X1norm" }, X1, W.norm_ffn, ["X₁", "X₁,norm"]) },
-          { symbol: "× W_up → GELU →" },
-          { label: "GELU activations (5 × 8)", shape: "5 × 8", data: GELUED, rowLabels: PROMPT.map((p) => p.token),
-            colLabels: Array.from({ length: 8 }, (_, i) => `h${i}`), id: "GELU", digits: 3,
-            inspect: (r, c) => inspectGelu(r, c, { cell: "GELU" }) },
-          { symbol: "× W_down + X₁ =" },
-          { label: "X₂ (block output)", shape: "5 × 4", data: X2, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
-            id: "X2", digits: 3,
-            inspect: (r, c) => inspectResidual(r, c, { cell: "X2" }, X1, YFFN, X2, "X₂", "X₁", "Y_ffn") },
-        ]),
+        () => {
+          const tokens = PROMPT.map((p) => p.token);
+          const hcols = Array.from({ length: 8 }, (_, i) => `h${i}`);
+          return setBoard([
+            [
+              { label: "X₁ (attention output)", shape: "5 × 4", data: X1, rowLabels: tokens, colLabels: DIMLABEL("d"),
+                id: "X1src", digits: 3 },
+              { symbol: "→ RMSNorm →" },
+              { label: "X₁,norm", shape: "5 × 4", data: X1NORM, rowLabels: tokens, colLabels: DIMLABEL("d"),
+                id: "X1norm", digits: 3,
+                inspect: (r, c) => inspectNorm(r, c, { src: "X1src", cell: "X1norm" }, X1, W.norm_ffn, ["X₁", "X₁,norm"],
+                  "X₁ is the attention block's output from step 6: X₀ plus the projected context, added on the residual stream.") },
+              { symbol: "×" },
+              { label: "W_up (8 × 4)", shape: "8 × 4", data: W.up, rowLabels: hcols, colLabels: DIMLABEL("d"),
+                id: "Wup", digits: 3 },
+              { symbol: "=" },
+              { label: "Expansion (5 × 8, before GELU)", shape: "5 × 8", data: UPPRE, rowLabels: tokens,
+                colLabels: hcols, id: "UP", digits: 3,
+                inspect: (r, c) => inspectDot(r, c, { row: "X1norm", col: "Wup", cell: "UP" }, X1NORM, W.up, UPPRE[r][c], "expansion", "W_up") },
+            ],
+            [
+              { label: "GELU activations (5 × 8)", shape: "5 × 8", data: GELUED, rowLabels: tokens, colLabels: hcols,
+                id: "GELU", digits: 3,
+                inspect: (r, c) => inspectGelu(r, c, { cell: "GELU", src: "UP" }) },
+              { symbol: "×" },
+              { label: "W_down (4 × 8)", shape: "4 × 8", data: W.down, rowLabels: DIMLABEL("d"), colLabels: hcols,
+                id: "Wdown", digits: 3 },
+              { symbol: "=" },
+              { label: "Y_ffn (5 × 4)", shape: "5 × 4", data: YFFN, rowLabels: tokens, colLabels: DIMLABEL("d"),
+                id: "Yffn", digits: 3,
+                inspect: (r, c) => inspectDot(r, c, { row: "GELU", col: "Wdown", cell: "Yffn" }, GELUED, W.down, YFFN[r][c], "Y_ffn", "W_down") },
+              { symbol: "+ X₁ =" },
+              { label: "X₂ (block output)", shape: "5 × 4", data: X2, rowLabels: tokens, colLabels: DIMLABEL("d"),
+                id: "X2", digits: 3,
+                inspect: (r, c) => inspectResidual(r, c, { cell: "X2", a: "X1src", b: "Yffn" }, X1, YFFN, X2, "X₂", "X₁", "Y_ffn",
+                  "X₁ is the same matrix the block started with (shown in the row above), Y_ffn is the down projection beside it.") },
+            ],
+          ]);
+        },
         "Attention mixes tokens; the FFN mixes dimensions",
-        `W_up and W_down are independent matrices, as in the real block (there 128 → 512 → 128; here 4 → 8 → 4, the same shape in a size you can read). This is the last operation of block 1 — blocks 2 to ${REAL.layers} repeat steps 2–7 on X₂.`);
+        `Two rows, in the same order the block computes them: normalise X₁, expand it with <code>W_up</code> (4 → 8) into the pre-GELU activations, apply GELU, contract with <code>W_down</code> (8 → 4) into Y_ffn, then add the block's input back. W_up and W_down are independent matrices, exactly as in the real block (there 128 → 512 → 128; here the same shape in a size you can read) — row <code>h3</code> of W_up is the feature detector the GELU panel refers to. This is the last operation of block 1; blocks 2 to ${REAL.layers} repeat steps 2–7 on X₂.`);
 
       step("Step 8 · Final norm and the tied head",
         "After the last block, only the final token's vector is scored against the vocabulary. The head reuses W_embed, so every logit is a dot product with a token's own embedding row.",
