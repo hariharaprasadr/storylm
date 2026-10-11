@@ -826,8 +826,10 @@
         const ms = ss / src[row].length;
         const r = Math.sqrt(ms + EPS);
         const scaled = src[row][col] / r;
+        const dispRow = ids.dispRow === undefined ? row : ids.dispRow;
         mark(`row_${ids.src}_${row}`, "highlighted-row");
-        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        mark(`cell_${ids.cell}_${dispRow}_${col}`, "active-cell");
+        if (ids.gain) mark(`cell_${ids.gain}_0_${col}`, "linked-cell");
         const labelsOf = ids.srcCols ? ids.srcCols.map((l) => l) : DIMS.map((d) => `d${d}`);
         showInspect(`RMSNorm: ${PROMPT[row].token} (row ${row}, dimension ${DIMS[col]})`,
           tagRow("0 · Source row", `${labels[0]}[${row}] = ${src[row].map((v, i) => `<span class="v">${num(v, 4)}</span> <span class="muted-small">(${labelsOf[i]})</span>`).join(", ")} — the highlighted row of ${labels[0]} above`)
@@ -835,7 +837,7 @@
           + tagRow("2 · Mean square", `${num(ss, 4)} / ${src[row].length} = ${num(ms, 4)}`)
           + tagRow("3 · RMS", `√(${num(ms, 4)} + ε), ε = ${EPS} → ${num(r, 4)}`)
           + tagRow("4 · Normalise", `${num(src[row][col], 4)} / ${num(r, 4)} = ${num(scaled, 4)}`)
-          + tagRow("5 · Learned gain", `× ${num(gain[col], 3)} = <strong>${num(scaled * gain[col], 4)}</strong>`),
+          + tagRow("5 · Learned gain", `× ${num(gain[col], 4)}${ids.gain ? " (dashed in the gain row above)" : ""} = <strong>${num(scaled * gain[col], 4)}</strong>`),
           `= ${num(scaled * gain[col], 4)}`,
           `${labels[0]} → ${labels[1]}: divide by the root mean square, then scale by the layer's learned gain (nn.RMSNorm, ε = ${EPS}).${origin ? " " + origin : ""}`);
       }
@@ -977,14 +979,30 @@
 
       function inspectLogit(col, ids) {
         clearHighlights();
+        if (ids.embed) mark(`row_${ids.embed}_${col}`, "highlighted-row");
         mark(`cell_${ids.cell}_0_${col}`, "active-cell");
+        let dot = 0;
+        const terms = LAST.map((v, d) => { dot += v * W.embed[col][d]; return `${num(v, 3)}×${num(W.embed[col][d], 3)}`; });
         showInspect(`Logit: ${TOKENS[col]} (id ${IDS[col]})`,
-          tagRow("Tied head", LAST.map((v, d) => `${num(v, 3)}×${num(W.embed[col][d], 3)}`).join(" + "))
-          + tagRow("Logit", `<strong>${num(LOGITS[col], 4)}</strong>`)
-          + tagRow("Softmax", `exp(${num(LOGITS[col], 4)} − ${num(NEXT.max, 4)}) / ${num(NEXT.sum, 4)} = ${num(PROBS[col], 4)}`),
-          `= ${num(PROBS[col], 4)} (${pct(PROBS[col])})`,
-          col === WIN_INDEX ? `Highest of the eight: this toy block predicts ${TOKENS[col]}.`
-                            : `A lower-scoring alternative (${pct(PROBS[col])}).`);
+          tagRow("0 · Where the row comes from", `the head reuses W_embed, so column ${col} of the logit vector is the dot product with <em>row ${col}</em> of W_embed — the row highlighted above (token <code>${esc(TOKENS[col])}</code>, id ${IDS[col]})`)
+          + tagRow("1 · Dot product", `x₄,norm · W_embed[${col}] = ${terms.join(" + ")}`)
+          + tagRow("2 · Logit", `<strong>${num(dot, 4)}</strong>${Math.abs(dot - LOGITS[col]) > 1e-9 ? ` (matrix: ${num(LOGITS[col], 4)})` : ""}`),
+          `= ${num(LOGITS[col], 4)}`,
+          `One logit per token, no separate output matrix: the tied head means the same 8 × 4 table is read as input rows and as output columns.${col === WIN_INDEX ? ` Highest of the eight — this toy block predicts ${TOKENS[col]}.` : ` A lower-scoring alternative (${pct(PROBS[col])}).`} Click the logit cell in the “probabilities” row to see the softmax step.`);
+      }
+
+      // Softmax gets its own panel: logits -> exp(logit - max) -> normalise
+      function inspectSoftmax(col, ids) {
+        clearHighlights();
+        mark(`cell_${ids.logits}_0_${col}`, "linked-cell");
+        mark(`cell_${ids.probs}_0_${col}`, "active-cell");
+        showInspect(`Softmax: ${TOKENS[col]} (id ${IDS[col]})`,
+          tagRow("1 · Logit", `row ${col} of the logit vector = <span class="v">${num(LOGITS[col], 4)}</span> (dashed in “logits”)`)
+          + tagRow("2 · Shift", `logit − max = ${num(LOGITS[col], 4)} − ${num(NEXT.max, 4)} = ${num(LOGITS[col] - NEXT.max, 4)}`)
+          + tagRow("3 · Exponent", `exp(${num(LOGITS[col] - NEXT.max, 4)}) = ${num(NEXT.exps[col], 6)}`)
+          + tagRow("4 · Normalise", `${num(NEXT.exps[col], 6)} / ${num(NEXT.sum, 6)} = <strong>${num(PROBS[col], 6)}</strong>`),
+          `= ${num(PROBS[col], 6)} (${pct(PROBS[col])})`,
+          `Subtracting the row maximum first keeps the exponentials in range; it cancels out in the ratio, so the probabilities are unchanged. The eight probabilities total 1.000 — the Σ column checks it.`);
       }
 
       // ---------- rendering ----------
@@ -1285,15 +1303,39 @@
         `Two rows, in the same order the block computes them: normalise X₁, expand it with <code>W_up</code> (4 → 8) into the pre-GELU activations, apply GELU, contract with <code>W_down</code> (8 → 4) into Y_ffn, then add the block's input back. W_up and W_down are independent matrices, exactly as in the real block (there 128 → 512 → 128; here the same shape in a size you can read) — row <code>h3</code> of W_up is the feature detector the GELU panel refers to. This is the last operation of block 1; blocks 2 to ${REAL.layers} repeat steps 2–7 on X₂.`);
 
       step("Step 8 · Final norm and the tied head",
-        "After the last block, only the final token's vector is scored against the vocabulary. The head reuses W_embed, so every logit is a dot product with a token's own embedding row.",
-        () => setBoard([
-          { label: `Last vector x${PROMPT.length - 1},norm (${PROMPT[PROMPT.length - 1].token})`, shape: "1 × 4", data: [LAST],
-            rowLabels: [PROMPT[PROMPT.length - 1].token], colLabels: DIMLABEL("d"), id: "last", digits: 3 },
-          { symbol: "× W_embedᵀ =" },
-          { label: "Logits (1 × 8)", shape: "1 × 8", data: [LOGITS], rowLabels: ["logits"], colLabels: TOKENS,
-            id: "logits", digits: 3,
-            inspect: (r, c) => inspectLogit(c, { cell: "logits" }) },
-        ]),
+        "After the last block, only the final token's vector is scored against the vocabulary. It is normalised once more by the final norm, then the head reuses W_embed — so each logit is a dot product with a token's own embedding row, and the softmax turns the eight logits into probabilities.",
+        () => {
+          const tokens = PROMPT.map((p) => p.token);
+          const lastToken = tokens[tokens.length - 1];
+          return setBoard([
+            [
+              { label: "X₂ (block output; last row is used)", shape: "5 × 4", data: X2, rowLabels: tokens,
+                colLabels: DIMLABEL("d"), id: "X2out", digits: 3 },
+              { symbol: "→ final RMSNorm →" },
+              { label: "final norm gain (1 × 4)", shape: "1 × 4", data: [W.norm_final], rowLabels: ["gain"],
+                colLabels: DIMLABEL("d"), id: "FINALgain", digits: 3 },
+              { symbol: "=" },
+              { label: `x${PROMPT.length - 1},norm (${lastToken})`, shape: "1 × 4", data: [LAST],
+                rowLabels: [lastToken], colLabels: DIMLABEL("d"), id: "last", digits: 4,
+                inspect: (r, c) => inspectNorm(PROMPT.length - 1, c, { src: "X2out", cell: "last", dispRow: 0, gain: "FINALgain" }, X2, W.norm_final,
+                  [`X₂ row ${PROMPT.length - 1}`, `x${PROMPT.length - 1},norm`],
+                  `The rows of X₂ above the last one are carried along but never scored: sampling reads the final position only. This is block 1's output — the real model applies the final norm after all ${REAL.layers} blocks, and the provenance note below lists the layer-by-layer lens.`) },
+            ],
+            [
+              { label: "W_embed (8 tokens × 4, also the output head)", shape: "8 × 4", data: W.embed,
+                rowLabels: TOKENS, colLabels: DIMLABEL("d"), id: "embed8", digits: 3 },
+              { symbol: "→ each logit = x · one row →" },
+              { label: "Logits (1 × 8)", shape: "1 × 8", data: [LOGITS], rowLabels: ["logits"], colLabels: TOKENS,
+                id: "logits", digits: 3,
+                inspect: (r, c) => inspectLogit(c, { cell: "logits", embed: "embed8" }) },
+              { symbol: "softmax →" },
+              { label: "Probabilities (1 × 8)", shape: "1 × 8", data: [PROBS], rowLabels: ["p"], colLabels: TOKENS,
+                id: "probs", digits: 4, sigma: (row) => row.reduce((a, b) => a + b, 0),
+                sigmaNote: "These are the eight softmax probabilities: they total exactly 1 because each is divided by their own sum. The cells beside it are rounded to four decimals for display.",
+                inspect: (r, c) => inspectSoftmax(c, { logits: "logits", probs: "probs" }) },
+            ],
+          ]);
+        },
         "Softmax, and what the real model predicts",
         `<div class="prob-row">${TOKENS.map((t, i) => `<span class="prob-chip${i === WIN_INDEX ? " is-win" : ""}"><span class="chip-token">${esc(t)}</span><span class="chip-pct">${pct(PROBS[i])}</span></span>`).join("")}</div>
          <p><strong>One block, four dimensions, and the answer is already right.</strong> The toy's argmax is <code>${esc(WINNER)}</code> at ${pct(PROBS[WIN_INDEX])}; the shipped model on all ${REAL.d_model} dimensions and all ${REAL.layers} blocks gives <code>${esc(T.real_model.next_token[0].token)}</code> ${pct(T.real_model.next_token[0].p)} (logit ${num(T.real_model.next_token[0].logit, 2)}). Both agree: after the prompt tags the story starts with a line. The full model needs six of its eight layers to get there — the note below has the layer-by-layer numbers.</p>`);
