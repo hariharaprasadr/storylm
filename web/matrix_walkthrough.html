@@ -204,9 +204,15 @@
     }
 
     /* Interactive highlights */
+    table.matrix-table tr.is-query td { background: rgba(184, 80, 31, 0.22) !important; border-color: var(--highlight-cell) !important; }
+    table.matrix-table tr.is-key td { background: rgba(49, 89, 143, 0.22) !important; border-color: #31598f !important; }
     table.matrix-table tr.highlighted-row td {
       background: var(--highlight-row) !important;
       border-color: var(--accent) !important;
+    }
+    table.matrix-table td.linked-cell {
+      outline: 2px dashed var(--accent-cyan);
+      outline-offset: -2px;
     }
     table.matrix-table td.highlighted-col {
       background: var(--highlight-col) !important;
@@ -235,6 +241,21 @@
     }
 
     /* Inspector Card */
+    /* The panel is text you should be able to select and copy. */
+    .inspector-card, .inspector-steps, .inspector-eval, .inspector-hint, .calc-math {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    /* Values that came out of a matrix are chipped so it is obvious what is being
+       referred to (and they match the row tint of the matrix they came from). */
+    .calc-math .v {
+      padding: 0 4px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.10);
+      font-weight: 600;
+    }
+    .calc-math .v.q { color: #f2a679; background: rgba(184, 80, 31, 0.25); }
+    .calc-math .v.k { color: #9cc7ff; background: rgba(49, 89, 143, 0.30); }
     .inspector-card {
       background: #1b1612;
       color: #ede5d8;
@@ -617,7 +638,10 @@
       const DIMS = T.dims;
 
       // ---------- formatting ----------
-      const num = (v, digits) => (Math.abs(v) < 5e-7 ? 0 : v).toFixed(digits);
+      const num = (v, digits) => {
+        const x = Number(v);
+        return (Math.abs(x) < 5e-7 ? 0 : x).toFixed(digits);
+      };
       const pct = (p) => (p >= 0.99995 ? "≈100%" : p < 0.0005 ? "<0.1%" : (p * 100).toFixed(1) + "%");
       // tokens like <BOS> must never be parsed as HTML
       const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -723,8 +747,8 @@
 
       // ---------- inspector plumbing ----------
       function clearHighlights() {
-        document.querySelectorAll(".highlighted-row, .highlighted-col, .active-cell")
-          .forEach((el) => el.classList.remove("highlighted-row", "highlighted-col", "active-cell"));
+        document.querySelectorAll(".highlighted-row, .highlighted-col, .active-cell, .linked-cell, .is-query, .is-key")
+          .forEach((el) => el.classList.remove("highlighted-row", "highlighted-col", "active-cell", "linked-cell", "is-query", "is-key"));
       }
       const mark = (id, cls) => { const el = byId(id); if (el) el.classList.add(cls); };
       const tagRow = (tag, html) => `<div class="calc-row"><span class="calc-tag">${tag}</span><span class="calc-math">${html}</span></div>`;
@@ -739,6 +763,20 @@
       // was copied from (row index and embedding row are different numbers — the
       // prompt's tokens live on rows 1-5 of the table while X₀ counts 0-4), and a
       // cell of the table itself describes that row.
+      // The Σ column: the same row of weights, added instead of multiplied.
+      function inspectRowSum(m, row) {
+        clearHighlights();
+        const total = m.sigma(m.data[row]);
+        mark(`row_${m.id}_${row}`, "highlighted-row");
+        mark(`cell_${m.id}_sigma_${row}`, "active-cell");
+        showInspect(`Row sum (${m.label}, row ${row})`,
+          tagRow("Add the row", m.data[row].map((v, c) => num(v, 4)).join(" + "))
+          + tagRow("Total", `<strong>${num(total, 6)}</strong>`)
+          + tagRow("Shown as", `the Σ cell prints it to three decimals: <strong>${num(total, 3)}</strong>`),
+          `= ${num(total, 3)}`,
+          m.sigmaNote || "Computed from the unrounded weights, so this is the row's true total even though the cells beside it are rounded for display.");
+      }
+
       // For matrices that are an input to a step: no operation to show, so describe the cell.
       function inspectPlainCell(m, row, col, value) {
         clearHighlights();
@@ -844,36 +882,68 @@
           `Both heads rotate: head ${head + 1} owns dimensions ${head * HD}–${head * HD + HD - 1}, rotated in pairs. With head_dim ${HD} the single frequency is ${num(INV_FREQ[0], 4)} rad/token (${num(INV_FREQ[0] * 180 / Math.PI, 1)}°); the real head_dim 16 rotates 8 pairs per head, from ${num(1, 4)} down to ${num(1 / Math.pow(10000, 14 / 16), 4)} (storylm/model.py:32).`);
       }
 
+      const chip = (cls, v, digits = 3) => `<span class="v ${cls}">${num(v, digits)}</span>`;
+      const qrow = (head, row) => QROPE[row].slice(head * HD, head * HD + HD);
+      const krow = (head, row) => KROPE[row].slice(head * HD, head * HD + HD);
+
       function inspectAttention(head, row, col, ids) {
         clearHighlights();
         const hd = HEADDETAIL[head];
-        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        // the query row and the key row this score was built from
+        mark(`row_Qhead_${row}`, "highlighted-row");
+        mark(`row_Qhead_${row}`, "is-query");
+        mark(`row_Khead_${col}`, "highlighted-row");
+        mark(`row_Khead_${col}`, "is-key");
+        mark(`cell_${ids.score}_${row}_${col}`, "active-cell");
+        if (col <= row) mark(`cell_${ids.attn}_${row}_${col}`, "linked-cell");
+
+        const q = qrow(head, row), k = krow(head, col);
+        let dot = 0;
+        const terms = q.map((v, d) => { dot += v * k[d]; return `${chip("q", v)}×${chip("k", k[d])}`; });
+        const scaled = dot / Math.sqrt(HD);
+        const dimList = Array.from({ length: HD }, (_, d) => head * HD + d).join(", ");
+        const headNote = `head ${head + 1} (dims ${dimList})`;
+        const lines =
+          tagRow("1 · Query row", `q${row} = [${q.map((v) => chip("q", v)).join(", ")}] — row ${row} of Q_head (${headNote})`)
+          + tagRow("2 · Key row", `k${col} = [${k.map((v) => chip("k", v)).join(", ")}] — row ${col} of K_head`)
+          + tagRow("3 · Dot product", `q${row} · k${col} = ${terms.join(" + ")} = <strong>${num(dot, 4)}</strong>`)
+          + tagRow("4 · Scale", `${num(dot, 4)} / √${HD} = ${num(dot, 4)} / ${num(Math.sqrt(HD), 6)} = <strong>${num(scaled, 4)}</strong> ← the cell in “Scores”`);
+
         if (col > row) {
           showInspect(`Causal mask: ${PROMPT[row].token} → ${PROMPT[col].token}`,
-            tagRow("Rule", `Column ${col} is in the future of row ${row}: before the softmax the score is set to −∞.`)
-            + tagRow("Softmax", `exp(−∞) = 0 → weight <strong>0.000</strong>`),
-            "= 0.000", "An autoregressive model cannot attend to tokens it has not produced yet.");
+            lines
+            + tagRow("5 · Mask", `column ${col} is in the future of row ${row}, so this score is replaced by −∞ before the softmax`)
+            + tagRow("6 · Softmax", `exp(−∞) = 0 → weight <strong>0.000</strong>`),
+            "= 0.000",
+            `The score exists (${num(scaled, 4)}) but is discarded: an autoregressive model cannot attend to tokens it has not produced yet. The Q row and K row are highlighted above.`);
           return;
         }
         showInspect(`Attention weight, head ${head + 1}: ${PROMPT[row].token} → ${PROMPT[col].token}`,
-          tagRow("1 · Raw score", `(q${row} · k${col}) / √${HD} = <strong>${num(hd.rows[row].raw[col], 4)}</strong>`)
-          + tagRow("2 · Exponent", `exp(${num(hd.rows[row].raw[col], 4)} − ${num(hd.rows[row].max, 4)}) = ${num(hd.rows[row].exps[col], 4)}`)
-          + tagRow("3 · Softmax", `${num(hd.rows[row].exps[col], 4)} / ${num(hd.rows[row].sum, 4)} = <strong>${num(hd.probs[row][col], 4)}</strong>`),
+          lines
+          + tagRow("5 · Exponent", `exp(${num(scaled, 4)} − ${num(hd.rows[row].max, 4)}) = ${num(hd.rows[row].exps[col], 4)}`)
+          + tagRow("6 · Softmax", `${num(hd.rows[row].exps[col], 4)} / ${num(hd.rows[row].sum, 4)} = <strong>${num(hd.probs[row][col], 4)}</strong>`),
           `= ${num(hd.probs[row][col], 4)} (${pct(hd.probs[row][col])})`,
-          `Head ${head + 1} normalises this row itself: the five weights sum to 1, shown unrounded in the Σ column. Each head runs its own softmax.`);
+          `Row ${row} of Q_head and row ${col} of K_head are highlighted, and the matching cells in “Scores” (${num(scaled, 3)}) and “A” (${num(hd.probs[row][col], 4)}) are marked. Each head normalises its own row: the five weights sum to 1, shown unrounded in the Σ column.`);
       }
 
       function inspectContext(head, row, col, ids) {
         clearHighlights();
         const hd = HEADDETAIL[head];
+        mark(`row_${ids.attn}_${row}`, "highlighted-row");
+        for (let k = 0; k < PROMPT.length; k++) mark(`cell_${ids.value}_${k}_${col}`, "highlighted-col");
         mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
         let sum = 0;
-        for (let k = 0; k < PROMPT.length; k++) sum += hd.probs[row][k] * Vm[k][head * HD + col];
+        const terms = hd.probs[row].map((a, k) => {
+          sum += a * Vm[k][head * HD + col];
+          return `${num(a, 4)}×${num(Vm[k][head * HD + col], 3)}`;
+        });
         showInspect(`Context, head ${head + 1}: ${PROMPT[row].token}, dimension ${head * HD + col}`,
-          tagRow("Weighted sum", hd.probs[row].map((a, k) => `${num(a, 4)}×${num(Vm[k][head * HD + col], 3)}`).join(" + "))
+          tagRow("Weights", `row ${row} of A gives ${hd.probs[row].map((a) => chip("", a, 4)).join(" ")}`)
+          + tagRow("Values", `column ${col} of V_head gives ${Vm.map((_, k) => chip("v", Vm[k][head * HD + col])).join(" ")}`)
+          + tagRow("Weighted sum", terms.join(" + "))
           + tagRow("Result", `<strong>${num(sum, 4)}</strong>`),
           `= ${num(sum, 4)}`,
-          "Each head produces 2 of the block's 4 dimensions; the two contexts are concatenated into the 5 × 4 matrix used in step 6.");
+          `Row ${row} of A and column ${col} of V_head are highlighted: the context is a weighted average of the five value rows. Each head contributes 2 of the block's 4 dimensions; the two contexts are concatenated for step 6.`);
       }
 
       function inspectResidual(row, col, ids, A, B, out, labelOut, labelA, labelB) {
@@ -990,7 +1060,12 @@
           if (m.sigma) {
             const td = document.createElement("td");
             td.className = "sigma-cell";
+            td.id = `cell_${m.id}_sigma_${r}`;
+            td.tabIndex = 0;
             td.textContent = num(m.sigma(row), 3);
+            const explain = () => inspectRowSum(m, r);
+            td.addEventListener("focus", explain);
+            td.addEventListener("click", explain);
             tr.append(td);
           }
           tbody.append(tr);
@@ -1000,22 +1075,27 @@
         return box;
       }
 
-      function setBoard(items) {
+      // `rows` is a list of items, or a list of rows of items when a step needs two
+      // lines (step 5 shows the operands and the softmax separately).
+      function setBoard(rows) {
         const board = byId("calcBoard");
         board.innerHTML = "";
-        const op = document.createElement("div");
-        op.className = "matrix-operation";
-        items.forEach((item) => {
-          if (item.symbol) {
-            const s = document.createElement("div");
-            s.className = "op-symbol";
-            s.textContent = item.symbol;
-            op.append(s);
-            return;
-          }
-          op.append(matrixBox(item));
+        const lines = Array.isArray(rows[0]) ? rows : [rows];
+        lines.forEach((items) => {
+          const op = document.createElement("div");
+          op.className = "matrix-operation";
+          items.forEach((item) => {
+            if (item.symbol) {
+              const sym = document.createElement("div");
+              sym.className = "op-symbol";
+              sym.textContent = item.symbol;
+              op.append(sym);
+              return;
+            }
+            op.append(matrixBox(item));
+          });
+          board.append(op);
         });
-        board.append(op);
       }
 
       const TOKEN = (i) => PROMPT[i].token;
@@ -1092,23 +1172,41 @@
         "Inside each head: scores, a causal mask, a per-row softmax, and a weighted sum of the values.",
         () => {
           const h = HEADDETAIL[headTab];
+          const cols = Array.from({ length: HD }, (_, d) => headTab * HD + d);
+          const slice = (M) => M.map((row) => row.slice(headTab * HD, headTab * HD + HD));
+          const qh = slice(QROPE), kh = slice(KROPE), vh = slice(Vm);
+          const tokens = PROMPT.map((p) => p.token);
           const masked = h.rows.map((r, i) => r.raw.map((v, j) => (j > i ? 0 : v)));
+          const ids = { score: "S", attn: "Aattn", value: "Vhead" };
           return setBoard([
-            { label: `Scores Q·Kᵀ / √${HD} (head ${headTab + 1}, future masked)`, shape: "5 × 5", data: masked,
-              rowLabels: PROMPT.map((p) => p.token), colLabels: PROMPT.map((p) => p.token), id: "S", digits: 3,
-              inspect: (r, c) => inspectAttention(headTab, r, c, { cell: "S" }) },
-            { symbol: "softmax →" },
-            { label: `A (head ${headTab + 1})`, shape: "5 × 5", data: h.probs, rowLabels: PROMPT.map((p) => p.token),
-              colLabels: PROMPT.map((p) => p.token), id: "Aattn", digits: 3, sigma: (row) => row.reduce((a, b) => a + b, 0),
-              inspect: (r, c) => inspectAttention(headTab, r, c, { cell: "Aattn" }) },
-            { symbol: "× V →" },
-            { label: `Context (head ${headTab + 1})`, shape: "5 × 2", data: h.context, rowLabels: PROMPT.map((p) => p.token),
-              colLabels: [`v${headTab * HD}`, `v${headTab * HD + 1}`], id: "Ohead", digits: 3,
-              inspect: (r, c) => inspectContext(headTab, r, c, { cell: "Ohead" }) },
+            [
+              { label: `Q (head ${headTab + 1})`, shape: `5 × ${HD}`, data: qh, rowLabels: tokens,
+                colLabels: cols.map((d) => `q${d}`), id: "Qhead", digits: 3 },
+              { symbol: "× Kᵀ" },
+              { label: `K (head ${headTab + 1})`, shape: `5 × ${HD}`, data: kh, rowLabels: tokens,
+                colLabels: cols.map((d) => `k${d}`), id: "Khead", digits: 3 },
+              { symbol: `÷ √${HD}, future masked →` },
+              { label: `Scores (head ${headTab + 1})`, shape: "5 × 5", data: masked, rowLabels: tokens,
+                colLabels: tokens, id: "S", digits: 3,
+                inspect: (r, c) => inspectAttention(headTab, r, c, { ...ids, cell: "S" }) },
+            ],
+            [
+              { label: `A = softmax(Scores) (head ${headTab + 1})`, shape: "5 × 5", data: h.probs, rowLabels: tokens,
+                colLabels: tokens, id: "Aattn", digits: 3, sigma: (row) => row.reduce((a, b) => a + b, 0),
+                sigmaNote: "These are the softmax weights of this row: they always total exactly 1 because the softmax divides by their sum. The cells beside them are rounded to three decimals for display.",
+                inspect: (r, c) => inspectAttention(headTab, r, c, { ...ids, cell: "Aattn" }) },
+              { symbol: "×" },
+              { label: `V (head ${headTab + 1})`, shape: `5 × ${HD}`, data: vh, rowLabels: tokens,
+                colLabels: cols.map((d) => `v${d}`), id: "Vhead", digits: 3 },
+              { symbol: "=" },
+              { label: `Context (head ${headTab + 1})`, shape: `5 × ${HD}`, data: h.context, rowLabels: tokens,
+                colLabels: cols.map((d) => `v${d}`), id: "Ohead", digits: 3,
+                inspect: (r, c) => inspectContext(headTab, r, c, { attn: "Aattn", value: "Vhead", cell: "Ohead" }) },
+            ],
           ]);
         },
         "Two heads, two attention patterns",
-        `Each head has its own Q/K/V columns, its own 5 × 5 weights and its own 2-dimensional context; the two contexts are concatenated into the 5 × 4 matrix used next. The Σ column shows each row summing to 1 — the softmax runs per row, per head (the five displayed weights are rounded to three decimals, so the column is what you check sums to 1).`);
+        `The first row shows the head's own Q and K (2 dimensions each), the score <code>q·k / √${HD}</code> with the future positions masked, and the second row turns those scores into weights with a per-row softmax before blending V. Click or tab onto any cell: the panel prints the q and k values it multiplied, and the Q row, K row and matching cells are highlighted. Each head has its own Q/K/V columns, its own 5 × 5 weights and its own 2-dimensional context; the two contexts are concatenated into the 5 × 4 matrix used next. The Σ column shows each row summing to 1 — the five displayed weights are rounded to three decimals, so the Σ column is what you check sums to 1.`);
 
       step("Step 6 · Output projection and residual",
         "The concatenated context is projected back to model width, then added to the block's input.",
