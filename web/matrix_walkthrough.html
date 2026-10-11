@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoryLM — Matrix Multiplication Walkthrough</title>
+  <meta name="description" content="Step-by-step matrix multiplication walkthrough of a StoryLM forward pass, scaled down to 4 dimensions to inspect the exact math of every layer.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Custom Matrix Walkthrough Styles */
+    :root {
+      --cell-bg: #ffffff;
+      --cell-border: #e3dbc7;
+      --cell-hover: #fcf4e8;
+      --highlight-row: rgba(184, 80, 31, 0.16);
+      --highlight-col: rgba(49, 89, 143, 0.16);
+      --highlight-cell: #b8501f;
+      --highlight-cell-text: #ffffff;
+      --highlight-paired: rgba(29, 116, 132, 0.22);
+      --accent-cyan: #1d7484;
+    }
+
+    .walkthrough-hero {
+      padding: 44px 0 20px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-ink);
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .stepper-nav {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 16px 0;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line-soft);
+      scrollbar-width: thin;
+    }
+    .step-btn {
+      flex: 0 0 auto;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .step-btn:hover {
+      border-color: var(--accent);
+      color: var(--ink);
+    }
+    .step-btn.active {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+      font-weight: 500;
+    }
+    .step-btn .step-num {
+      opacity: 0.6;
+      margin-right: 4px;
+    }
+
+    /* Sub-tabs for steps with multiple sub-views (like Q/K/V) */
+    .subtabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .subtab-btn {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--paper-2);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .subtab-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Layout */
+    .walkthrough-content {
+      padding: 24px 0 80px;
+    }
+    .step-header {
+      margin-bottom: 24px;
+    }
+    .step-title {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      margin: 0 0 8px;
+      color: var(--ink);
+    }
+    .step-desc {
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 840px;
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    /* Matrix Display Cards */
+    .calc-board {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .matrix-operation {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+      overflow-x: auto;
+    }
+    .matrix-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .matrix-label {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--ink);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .matrix-shape {
+      font-size: 0.74rem;
+      color: var(--muted);
+      font-weight: normal;
+    }
+
+    /* Matrix Tables */
+    table.matrix-table {
+      border-collapse: separate;
+      border-spacing: 3px;
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      background: var(--paper-2);
+      padding: 6px;
+      border-radius: 8px;
+      border-left: 3px solid var(--ink);
+      border-right: 3px solid var(--ink);
+    }
+    table.matrix-table th {
+      padding: 4px 8px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: normal;
+      text-align: center;
+    }
+    table.matrix-table th.row-label {
+      text-align: right;
+      padding-right: 10px;
+      font-size: 0.75rem;
+      color: var(--ink);
+    }
+    table.matrix-table td {
+      background: var(--cell-bg);
+      border: 1px solid var(--cell-border);
+      padding: 6px 10px;
+      text-align: right;
+      border-radius: 4px;
+      min-width: 58px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      user-select: none;
+    }
+    table.matrix-table td:hover {
+      background: var(--cell-hover);
+      border-color: var(--accent);
+      transform: scale(1.04);
+    }
+
+    /* Interactive highlights */
+    table.matrix-table tr.highlighted-row td {
+      background: var(--highlight-row) !important;
+      border-color: var(--accent) !important;
+    }
+    table.matrix-table td.highlighted-col {
+      background: var(--highlight-col) !important;
+      border-color: var(--blue) !important;
+    }
+    table.matrix-table td.paired-cell {
+      background: var(--highlight-paired) !important;
+      border-color: var(--accent-cyan) !important;
+      font-weight: 600;
+    }
+    table.matrix-table td.active-cell {
+      background: var(--highlight-cell) !important;
+      color: var(--highlight-cell-text) !important;
+      border-color: var(--highlight-cell) !important;
+      font-weight: 600;
+      transform: scale(1.06);
+    }
+
+    .op-symbol {
+      font-size: 1.4rem;
+      font-family: var(--font-mono);
+      font-weight: bold;
+      color: var(--muted);
+      padding: 0 4px;
+      text-align: center;
+    }
+
+    /* Inspector Card */
+    .inspector-card {
+      background: #1b1612;
+      color: #ede5d8;
+      border-radius: var(--radius);
+      padding: 22px 26px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      line-height: 1.55;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    }
+    .inspector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .inspector-title {
+      color: #f2a679;
+      font-weight: 600;
+      font-size: 0.88rem;
+      letter-spacing: 0.03em;
+    }
+    .inspector-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .calc-row {
+      display: flex;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .calc-tag {
+      font-size: 0.72rem;
+      color: #e59364;
+      background: rgba(229, 147, 100, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .calc-math {
+      color: #f7f3ea;
+      font-size: 0.92rem;
+      word-break: break-word;
+    }
+    .calc-math strong {
+      color: #79c0ff;
+    }
+    .inspector-eval {
+      font-size: 1.08rem;
+      color: #56d364;
+      font-weight: 600;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255,255,255,0.15);
+    }
+    .inspector-hint {
+      color: #a49683;
+      font-size: 0.82rem;
+      margin-top: 10px;
+      font-family: var(--font-body);
+      font-style: italic;
+    }
+
+    /* Concept Notes Box */
+    .concept-card {
+      background: #fbf7ee;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 18px 22px;
+      margin-top: 18px;
+    }
+    .concept-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      color: var(--ink);
+      margin: 0 0 6px;
+    }
+    .concept-body {
+      font-size: 0.98rem;
+      color: var(--ink);
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    /* Nav Buttons Bottom */
+    .step-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line-soft);
+    }
+    .action-btn {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .action-btn:hover {
+      background: var(--ink);
+      color: #fff;
+    }
+    .action-btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .action-btn.primary:hover {
+      background: var(--accent-ink);
+    }
+
+    /* Comparison Table */
+    .dim-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin-top: 12px;
+    }
+    .dim-table th, .dim-table td {
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      text-align: left;
+    }
+    .dim-table th {
+      background: var(--paper-2);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+    .dim-table td.mono {
+      font-family: var(--font-mono);
+    }
+    /* wide tables scroll inside their own box rather than stretching the page */
+    .table-scroll { overflow-x: auto; }
+    .table-scroll .dim-table { min-width: 620px; }
+    .table-scroll .lens-table { min-width: 250px; }
+    /* token lists (step 1) */
+    .token-list { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-mono); font-size: 0.82rem; }
+    .token-row { display: flex; justify-content: space-between; gap: 16px; background: var(--cell-bg);
+                 border: 1px solid var(--cell-border); border-radius: 4px; padding: 6px 12px; }
+    .token-name { font-weight: 600; color: var(--accent); }
+    .token-id { color: var(--muted); }
+    /* row-sum column for the attention matrices */
+    table.matrix-table th.sigma-col { color: var(--accent-cyan); }
+    table.matrix-table td.sigma-cell { background: var(--paper-2); color: var(--accent-cyan);
+                                       cursor: default; font-weight: 600; }
+    table.matrix-table td.sigma-cell:hover { transform: none; background: var(--paper-2); border-color: var(--cell-border); }
+    /* keyboard focus must be as visible as hover */
+    table.matrix-table td:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--cell-hover); }
+    /* probability chips */
+    .prob-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; font-family: var(--font-mono); font-size: 0.82rem; }
+    .prob-chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 8px; border-radius: 4px;
+                 background: var(--paper-2); border: 1px solid var(--line-soft); }
+    .prob-chip.is-win { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .chip-pct { opacity: 0.85; }
+    /* provenance block */
+    #provenance { padding: 28px 0 70px; border-top: 1px solid var(--line-soft); }
+    .prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+    .prov-grid h3, .prov-refs h3 { font-family: var(--font-display); font-size: 1.05rem; margin: 0 0 8px; }
+    .prov-grid p, .prov-refs p { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin: 0 0 8px; }
+    .prov-refs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; margin-top: 24px; }
+    table.lens-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    table.lens-table th, table.lens-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); }
+    table.lens-table th { color: var(--muted); font-weight: 500; }
+    table.lens-table td.mono { font-family: var(--font-mono); }
+    .prov-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.9rem; line-height: 1.7; }
+    .muted-small { font-size: 0.78rem; }
+    .calc-error { font-family: var(--font-mono); color: var(--accent); padding: 16px 0; }
+  </style>
+</head>
+<body>
+
+  <header class="site-nav">
+    <div class="container nav-inner">
+      <a class="wordmark" href="index.html">Story<em>LM</em></a>
+      <ul class="nav-links">
+        <li><a href="index.html#story">Story Studio</a></li>
+        <li><a href="index.html#architecture">Architecture</a></li>
+        <li><a href="index.html#components">Components</a></li>
+        <li><a href="index.html#training">Training</a></li>
+        <li><a href="walkthrough.html">Walkthrough</a></li>
+        <li><a href="matrix_walkthrough.html" aria-current="page" style="color:var(--accent);font-weight:600;">Matrix Math</a></li>
+        <li><a href="index.html#comparison">Comparison</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <section class="walkthrough-hero">
+      <div class="container">
+        <span class="badge">Step-by-Step Matrix Arithmetic</span>
+        <h1 class="hero-title" style="font-size: 2.3rem; margin: 4px 0 12px;">
+          The forward pass, <em>one dot product at a time</em>
+        </h1>
+        <p class="hero-sub" style="max-width: 860px;">
+          How does the prompt <code>&lt;BOS&gt;&lt;CHAR=BLUEY&gt;&lt;MODE=BEDTIME&gt;&lt;PLACE=BEDROOM&gt;&lt;THEME=HELP&gt;</code> become the next token?
+          The forward pass of StoryLM's block is the same everywhere - only the sizes change. Here it is at
+          <strong>four dimensions</strong> (<code>d_model = 4</code>, 2 heads of 2, <code>V = 8</code>, <code>T = 5</code>),
+          so every multiply, rotation and softmax can be checked by hand. The weights are not invented:
+          they are four of the real checkpoint's 128 dimensions (block 1 of 8, dimensions <span id="heroDims">103-106</span>),
+          and one block on them already predicts what the full model predicts.
+        </p>
+
+        <!-- Dimensions Scale Note -->
+        <details style="margin-top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px;">
+          <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 0.88rem; color: var(--accent-ink); font-weight: 500;">
+            Compare: Toy Walkthrough vs. Real StoryLM Dimensions
+          </summary>
+          <div class="table-scroll">
+          <table class="dim-table">
+            <thead>
+              <tr>
+                <th>Dimension Concept</th>
+                <th>Toy Math Walkthrough</th>
+                <th>Real StoryLM (docs/tiny_model.md)</th>
+                <th>Why Reduced Here?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Context Length ($T$)</td>
+                <td class="mono">5 tokens (the prompt prefix)</td>
+                <td class="mono">384 tokens</td>
+                <td>Fits on a screen without scrolling 384 rows.</td>
+              </tr>
+              <tr>
+                <td>Model Dimension ($d_{\text{model}}$)</td>
+                <td class="mono">4 (dimensions 103-106)</td>
+                <td class="mono">128</td>
+                <td>4 dimensions keep a dot product to four terms you can verify by hand - and this slice is where the model's next-token decision survives truncation (see the note at the bottom).</td>
+              </tr>
+              <tr>
+                <td>Attention Heads ($h$)</td>
+                <td class="mono">2 heads ($d_{\text{head}} = 2$)</td>
+                <td class="mono">8 heads ($d_{\text{head}} = 16$)</td>
+                <td>Two heads of two dimensions, each with its own RoPE pair and its own softmax, concatenated afterwards - the real mechanics, not merged.</td>
+              </tr>
+              <tr>
+                <td>FFN Hidden ($d_{\text{ffn}}$)</td>
+                <td class="mono">8 (independent W_up, W_down)</td>
+                <td class="mono">512</td>
+                <td>Same expansion and contraction; up and down are separate matrices, as in the checkpoint.</td>
+              </tr>
+              <tr>
+                <td>Vocabulary Size ($V$)</td>
+                <td class="mono">8 tokens</td>
+                <td class="mono">3,509 tokens</td>
+                <td>Eight rows (one control token of each kind, &lt;LINE&gt;, and a word) keep the table and the logit vector on one screen. The ids shown are the real ones.</td>
+              </tr>
+              <tr>
+                <td>Depth (blocks)</td>
+                <td class="mono">1 block walked (8 also measured)</td>
+                <td class="mono">8 blocks</td>
+                <td>Steps 1-7 are one block. The exporter also runs all eight truncated blocks: same prediction.</td>
+              </tr>
+              <tr>
+                <td>Norms / activation</td>
+                <td class="mono">learned gain, ε = 1e-5, exact GELU</td>
+                <td class="mono">same</td>
+                <td>No shortcuts: the gain is the checkpoint's, GELU is the erf form <code>F.gelu</code> uses (not the tanh approximation).</td>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- STEP NAVIGATION -->
+    <div class="container">
+      <nav class="stepper-nav" id="stepperNav">
+        <!-- Rendered by JS -->
+      </nav>
+    </div>
+
+    <!-- MAIN WALKTHROUGH STAGE -->
+    <section class="walkthrough-content">
+      <div class="container">
+
+        <div class="step-header">
+          <h2 class="step-title" id="stepTitle">Step 1: Token IDs &amp; Embedding Lookup</h2>
+          <p class="step-desc" id="stepDesc">
+            Tokens enter the model as discrete integer indices. An embedding matrix translates each ID into a dense 4-dimensional vector.
+          </p>
+          <div id="subtabsContainer" class="subtabs" style="display:none; margin-top:14px;"></div>
+        </div>
+
+        <div class="calc-board" id="calcBoard">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- LIVE CELL INSPECTOR -->
+        <div class="inspector-card" id="inspectorCard" role="region" aria-label="Interactive cell inspector" style="margin-top: 24px;">
+          <div class="inspector-header">
+            <span class="inspector-title" id="inspectTitle">Interactive Cell Inspector</span>
+            <span style="font-size: 0.78rem; color: #a49683;">Hover, click or tab onto any cell in the matrices</span>
+          </div>
+          <div class="inspector-steps" id="inspectSteps" aria-live="polite">
+            <div class="calc-row">
+              <span class="calc-tag">Guide</span>
+              <span class="calc-math" id="inspectFormula">Hover, click or tab onto any cell in the result matrix above to inspect that cell's arithmetic.</span>
+            </div>
+          </div>
+          <div class="inspector-eval" id="inspectEval" aria-live="polite"></div>
+          <div class="inspector-hint" id="inspectHint">Each cell is calculated through explicit vector and matrix operations.</div>
+        </div>
+
+        <!-- CONCEPT EXPLANATION -->
+        <div class="concept-card" id="conceptCard">
+          <h3 class="concept-title" id="conceptTitle">What is happening mathematically?</h3>
+          <p class="concept-body" id="conceptBody">...</p>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="step-actions">
+          <button class="action-btn" id="prevBtn" onclick="prevStep()">← Previous Step</button>
+          <span style="font-family: var(--font-mono); font-size: 0.85rem; align-self: center;" id="stepCounter">Step 1 of 8</span>
+          <button class="action-btn primary" id="nextBtn" onclick="nextStep()">Next Step →</button>
+        </div>
+
+      </div>
+    </section>
+
+    <section id="provenance">
+      <div class="container" id="provenanceBody">
+        <span class="badge">Provenance &amp; cross-checks</span>
+        <div id="provenance"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer style="border-top:1px solid var(--line-soft); padding:32px 0; text-align:center; font-family:var(--font-mono); font-size:0.8rem; color:var(--muted);">
+    <div class="container">
+      StoryLM &mdash; 2.02M parameter language model on embedded hardware.
+      <br>
+      <a href="index.html" style="color:var(--accent);">Return to Story Studio</a> &bull;
+      <a href="walkthrough.html" style="color:var(--accent);">Full Forward Pass Walkthrough</a>
+    </div>
+  </footer>
+
+  <!-- The toy block on this page is a slice of the shipped checkpoint, generated by
+         .venv/bin/python training/export_matrix_toy.py   (block 1, dimensions 103-106) -->
+  <script src="matrix_toy_data.js"></script>
+  <script>
+    "use strict";
+    (() => {
+      const T = window.MATRIX_TOY;
+      const byId = (id) => document.getElementById(id);
+      if (!T) {
+        document.addEventListener("DOMContentLoaded", () => {
+          byId("calcBoard").innerHTML =
+            `<p class="calc-error">matrix_toy_data.js is missing. Generate it with
+             <code>.venv/bin/python training/export_matrix_toy.py</code>, then reload.</p>`;
+        });
+        return;
+      }
+
+      const TOKENS = T.tokens.map((t) => t.token);
+      const IDS = T.tokens.map((t) => t.id);
+      const PROMPT = T.prompt;
+      const W = T.weights;
+      const TOY = T.config.toy;
+      const REAL = T.config.real;
+      const EPS = TOY.eps;
+      const HEADS = TOY.heads;
+      const HD = TOY.head_dim;
+      const DIMS = T.dims;
+
+      // ---------- formatting ----------
+      const num = (v, digits) => (Math.abs(v) < 5e-7 ? 0 : v).toFixed(digits);
+      const pct = (p) => (p >= 0.99995 ? "≈100%" : p < 0.0005 ? "<0.1%" : (p * 100).toFixed(1) + "%");
+      // tokens like <BOS> must never be parsed as HTML
+      const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      // ---------- math (mirroring storylm/model.py) ----------
+      const matT = (M) => M[0].map((_, j) => M.map((row) => row[j]));
+      function matmul(A, B) {
+        const out = [];
+        for (let i = 0; i < A.length; i++) {
+          const row = [];
+          for (let j = 0; j < B[0].length; j++) {
+            let sum = 0;
+            for (let k = 0; k < B.length; k++) sum += A[i][k] * B[k][j];
+            row.push(sum);
+          }
+          out.push(row);
+        }
+        return out;
+      }
+      function rmsnorm(row, gain) {
+        let ms = 0;
+        for (const v of row) ms += v * v;
+        const r = Math.sqrt(ms / row.length + EPS);
+        return row.map((v, i) => (v / r) * gain[i]);
+      }
+      // erf by Abramowitz & Stegun 7.1.26, |error| < 1.5e-7: GELU as torch's F.gelu computes it
+      function erf(x) {
+        const sign = x < 0 ? -1 : 1;
+        const a = Math.abs(x);
+        const t = 1 / (1 + 0.3275911 * a);
+        const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a);
+        return sign * y;
+      }
+      const gelu = (x) => 0.5 * x * (1 + erf(x / Math.SQRT2));
+      const INV_FREQ = TOY.inv_freq;
+      function ropeRow(row, pos) {
+        const out = row.slice();
+        for (let h = 0; h < HEADS; h++) {
+          for (let i = 0; i < INV_FREQ.length; i++) {
+            const a = pos * INV_FREQ[i], c = Math.cos(a), s = Math.sin(a);
+            const i0 = h * HD + 2 * i, i1 = i0 + 1;
+            out[i0] = row[i0] * c - row[i1] * s;
+            out[i1] = row[i0] * s + row[i1] * c;
+          }
+        }
+        return out;
+      }
+      function softmax(row, maskFrom) {
+        const masked = row.map((v, j) => (maskFrom !== undefined && j > maskFrom ? -Infinity : v));
+        const max = Math.max(...masked.filter(Number.isFinite));
+        const exps = masked.map((v) => (Number.isFinite(v) ? Math.exp(v - max) : 0));
+        const sum = exps.reduce((a, b) => a + b, 0);
+        return { probs: exps.map((v) => v / sum), exps, sum, max };
+      }
+
+      // ---------- the forward pass, one real block ----------
+      const X0 = PROMPT.map((p) => W.embed[p.row].slice());
+      const X0NORM = X0.map((row) => rmsnorm(row, W.norm_attn));
+      const Q = matmul(X0NORM, matT(W.q));
+      const K = matmul(X0NORM, matT(W.k));
+      const Vm = matmul(X0NORM, matT(W.v));
+      const QROPE = Q.map((row, pos) => ropeRow(row, pos));
+      const KROPE = K.map((row, pos) => ropeRow(row, pos));
+
+      const HEADDETAIL = [];
+      for (let h = 0; h < HEADS; h++) {
+        const head = { index: h, rows: [], probs: [], context: [] };
+        for (let i = 0; i < PROMPT.length; i++) {
+          const raw = [];
+          for (let j = 0; j < PROMPT.length; j++) {
+            let dot = 0;
+            for (let d = 0; d < HD; d++) dot += QROPE[i][h * HD + d] * KROPE[j][h * HD + d];
+            raw.push(dot / Math.sqrt(HD));
+          }
+          const sm = softmax(raw, i);
+          head.rows.push({ raw, ...sm });
+          head.probs.push(sm.probs);
+          const ctx = [];
+          for (let d = 0; d < HD; d++) {
+            let sum = 0;
+            for (let j = 0; j < PROMPT.length; j++) sum += sm.probs[j] * Vm[j][h * HD + d];
+            ctx.push(sum);
+          }
+          head.context.push(ctx);
+        }
+        HEADDETAIL.push(head);
+      }
+      const O = PROMPT.map((_, i) => HEADDETAIL.flatMap((h) => h.context[i]));
+      const YATTN = matmul(O, matT(W.proj));
+      const X1 = X0.map((row, i) => row.map((v, j) => v + YATTN[i][j]));
+      const X1NORM = X1.map((row) => rmsnorm(row, W.norm_ffn));
+      const UPPRE = matmul(X1NORM, matT(W.up));
+      const GELUED = UPPRE.map((row) => row.map(gelu));
+      const YFFN = matmul(GELUED, matT(W.down));
+      const X2 = X1.map((row, i) => row.map((v, j) => v + YFFN[i][j]));
+      const X2NORM = X2.map((row) => rmsnorm(row, W.norm_final));
+      const LAST = X2NORM[PROMPT.length - 1];
+      const LOGITS = W.embed.map((row) => row.reduce((s, v, d) => s + v * LAST[d], 0));
+      const NEXT = softmax(LOGITS);
+      const PROBS = NEXT.probs;
+      const WIN_INDEX = LOGITS.indexOf(Math.max(...LOGITS));
+      const WINNER = TOKENS[WIN_INDEX];
+
+      // ---------- inspector plumbing ----------
+      function clearHighlights() {
+        document.querySelectorAll(".highlighted-row, .highlighted-col, .active-cell")
+          .forEach((el) => el.classList.remove("highlighted-row", "highlighted-col", "active-cell"));
+      }
+      const mark = (id, cls) => { const el = byId(id); if (el) el.classList.add(cls); };
+      const tagRow = (tag, html) => `<div class="calc-row"><span class="calc-tag">${tag}</span><span class="calc-math">${html}</span></div>`;
+      function showInspect(title, steps, evaluation, hint) {
+        byId("inspectTitle").textContent = title;
+        byId("inspectSteps").innerHTML = steps;
+        byId("inspectEval").textContent = evaluation;
+        byId("inspectHint").textContent = hint;
+      }
+
+      function inspectEmbedding(row, col, ids) {
+        clearHighlights();
+        const p = PROMPT[row];
+        mark(`row_${ids.row}_${row}`, "highlighted-row");
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        showInspect(`Embedding lookup: ${p.token} (row ${row}, dimension ${DIMS[col]})`,
+          tagRow("Token id", `<code>${esc(p.token)}</code> is id <strong>${p.id}</strong> in the 3,509-token table, and row ${p.row} of this page's 8-row table.`)
+          + tagRow("Lookup", `X₀[${row}][${col}] = W_embed[${p.row}][${col}] = <strong>${num(X0[row][col], 3)}</strong>`),
+          `= ${num(X0[row][col], 3)}`,
+          "Selecting a row is a matrix slice: the one-hot vector of this id times W_embed.");
+      }
+
+      function inspectNorm(row, col, ids, src, gain, labels) {
+        clearHighlights();
+        let ss = 0;
+        for (const v of src[row]) ss += v * v;
+        const ms = ss / src[row].length;
+        const r = Math.sqrt(ms + EPS);
+        const scaled = src[row][col] / r;
+        mark(`row_${ids.src}_${row}`, "highlighted-row");
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        showInspect(`RMSNorm: ${PROMPT[row].token} (row ${row}, dimension ${DIMS[col]})`,
+          tagRow("1 · Sum of squares", `(${src[row].map((v) => num(v, 3) + "²").join(" + ")}) = ${num(ss, 4)}`)
+          + tagRow("2 · Mean square", `${num(ss, 4)} / ${src[row].length} = ${num(ms, 4)}`)
+          + tagRow("3 · RMS", `√(${num(ms, 4)} + ε), ε = ${EPS} → ${num(r, 4)}`)
+          + tagRow("4 · Normalise", `${num(src[row][col], 3)} / ${num(r, 4)} = ${num(scaled, 4)}`)
+          + tagRow("5 · Learned gain", `× ${num(gain[col], 3)} = <strong>${num(scaled * gain[col], 4)}</strong>`),
+          `= ${num(scaled * gain[col], 4)}`,
+          `${labels[0]} → ${labels[1]}: divide by the root mean square, then scale by the layer's learned gain (nn.RMSNorm, ε = ${EPS}).`);
+      }
+
+      function inspectDot(row, col, ids, A, B, out, labelOut, labelB) {
+        clearHighlights();
+        mark(`row_${ids.row}_${row}`, "highlighted-row");
+        B.forEach((_, i) => mark(`cell_${ids.col}_${i}_${col}`, "highlighted-col"));
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        let sum = 0;
+        for (let k = 0; k < A[row].length; k++) sum += A[row][k] * B[k][col];
+        showInspect(`${labelOut} (row ${row}, column ${col})`,
+          tagRow("Dot product", A[row].map((v, k) => `${num(v, 3)}×${num(B[k][col], 3)}`).join(" + "))
+          + tagRow("Sum", `<strong>${num(sum, 4)}</strong>`),
+          `= ${num(out, 3)}`,
+          `${A[row].length}-term dot product: one row of the left matrix times one column of ${labelB}.`);
+      }
+
+      function inspectRope(row, col, ids) {
+        clearHighlights();
+        const head = Math.floor(col / HD), i = Math.floor((col % HD) / 2), lane = col % 2;
+        const angle = row * INV_FREQ[i];
+        const i0 = head * HD + 2 * i, i1 = i0 + 1;
+        const a = Q[row][i0], b = Q[row][i1];
+        const c = Math.cos(angle), s = Math.sin(angle);
+        const value = lane === 0 ? a * c - b * s : a * s + b * c;
+        mark(`row_${ids.row}_${row}`, "highlighted-row");
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        showInspect(`RoPE: ${PROMPT[row].token} (position ${row}), head ${head + 1}, dimension ${col}`,
+          tagRow("Angle", `θ = position × inv_freq = ${row} × ${num(INV_FREQ[i], 4)} = ${num(angle, 4)} rad (${num(angle * 180 / Math.PI, 1)}°)`)
+          + tagRow("Rotation", lane === 0
+            ? `q${i0}′ = q${i0}·cos θ − q${i1}·sin θ = ${num(a, 3)}·${num(c, 3)} − ${num(b, 3)}·${num(s, 3)}`
+            : `q${i1}′ = q${i0}·sin θ + q${i1}·cos θ = ${num(a, 3)}·${num(s, 3)} + ${num(b, 3)}·${num(c, 3)}`)
+          + tagRow("Result", `<strong>${num(value, 4)}</strong>`),
+          `= ${num(value, 4)}`,
+          `Both heads rotate: head ${head + 1} owns dimensions ${head * HD}–${head * HD + HD - 1}, rotated in pairs. With head_dim ${HD} the single frequency is ${num(INV_FREQ[0], 4)} rad/token (${num(INV_FREQ[0] * 180 / Math.PI, 1)}°); the real head_dim 16 rotates 8 pairs per head, from ${num(1, 4)} down to ${num(1 / Math.pow(10000, 14 / 16), 4)} (storylm/model.py:32).`);
+      }
+
+      function inspectAttention(head, row, col, ids) {
+        clearHighlights();
+        const hd = HEADDETAIL[head];
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        if (col > row) {
+          showInspect(`Causal mask: ${PROMPT[row].token} → ${PROMPT[col].token}`,
+            tagRow("Rule", `Column ${col} is in the future of row ${row}: before the softmax the score is set to −∞.`)
+            + tagRow("Softmax", `exp(−∞) = 0 → weight <strong>0.000</strong>`),
+            "= 0.000", "An autoregressive model cannot attend to tokens it has not produced yet.");
+          return;
+        }
+        showInspect(`Attention weight, head ${head + 1}: ${PROMPT[row].token} → ${PROMPT[col].token}`,
+          tagRow("1 · Raw score", `(q${row} · k${col}) / √${HD} = <strong>${num(hd.rows[row].raw[col], 4)}</strong>`)
+          + tagRow("2 · Exponent", `exp(${num(hd.rows[row].raw[col], 4)} − ${num(hd.rows[row].max, 4)}) = ${num(hd.rows[row].exps[col], 4)}`)
+          + tagRow("3 · Softmax", `${num(hd.rows[row].exps[col], 4)} / ${num(hd.rows[row].sum, 4)} = <strong>${num(hd.probs[row][col], 4)}</strong>`),
+          `= ${num(hd.probs[row][col], 4)} (${pct(hd.probs[row][col])})`,
+          `Head ${head + 1} normalises this row itself: the five weights sum to 1, shown unrounded in the Σ column. Each head runs its own softmax.`);
+      }
+
+      function inspectContext(head, row, col, ids) {
+        clearHighlights();
+        const hd = HEADDETAIL[head];
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        let sum = 0;
+        for (let k = 0; k < PROMPT.length; k++) sum += hd.probs[row][k] * Vm[k][head * HD + col];
+        showInspect(`Context, head ${head + 1}: ${PROMPT[row].token}, dimension ${head * HD + col}`,
+          tagRow("Weighted sum", hd.probs[row].map((a, k) => `${num(a, 4)}×${num(Vm[k][head * HD + col], 3)}`).join(" + "))
+          + tagRow("Result", `<strong>${num(sum, 4)}</strong>`),
+          `= ${num(sum, 4)}`,
+          "Each head produces 2 of the block's 4 dimensions; the two contexts are concatenated into the 5 × 4 matrix used in step 6.");
+      }
+
+      function inspectResidual(row, col, ids, A, B, out, labelOut, labelA, labelB) {
+        clearHighlights();
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        showInspect(`${labelOut} (row ${row}, dimension ${DIMS[col]})`,
+          tagRow(labelA, num(A[row][col], 4))
+          + tagRow(labelB, num(B[row][col], 4))
+          + tagRow("Sum", `<strong>${num(out[row][col], 4)}</strong>`),
+          `= ${num(out[row][col], 4)}`,
+          "The residual stream keeps the earlier representation and adds this block's contribution.");
+      }
+
+      function inspectGelu(row, col, ids) {
+        clearHighlights();
+        mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
+        showInspect(`GELU: ${PROMPT[row].token} (row ${row}, hidden ${col})`,
+          tagRow("Input", `x = ${num(UPPRE[row][col], 4)}`)
+          + tagRow("GELU", `0.5 · x · (1 + erf(x/√2)) — erf to 1.5e-7`)
+          + tagRow("Result", `<strong>${num(GELUED[row][col], 4)}</strong>`),
+          `= ${num(GELUED[row][col], 4)}`,
+          "storylm/model.py calls F.gelu, which is this erf form — not the tanh approximation.");
+      }
+
+      function inspectLogit(col, ids) {
+        clearHighlights();
+        mark(`cell_${ids.cell}_0_${col}`, "active-cell");
+        showInspect(`Logit: ${TOKENS[col]} (id ${IDS[col]})`,
+          tagRow("Tied head", LAST.map((v, d) => `${num(v, 3)}×${num(W.embed[col][d], 3)}`).join(" + "))
+          + tagRow("Logit", `<strong>${num(LOGITS[col], 4)}</strong>`)
+          + tagRow("Softmax", `exp(${num(LOGITS[col], 4)} − ${num(NEXT.max, 4)}) / ${num(NEXT.sum, 4)} = ${num(PROBS[col], 4)}`),
+          `= ${num(PROBS[col], 4)} (${pct(PROBS[col])})`,
+          col === WIN_INDEX ? `Highest of the eight: this toy block predicts ${TOKENS[col]}.`
+                            : `A lower-scoring alternative (${pct(PROBS[col])}).`);
+      }
+
+      // ---------- rendering ----------
+      function matrixBox(m) {
+        const box = document.createElement("div");
+        box.className = "matrix-box";
+        const label = document.createElement("div");
+        label.className = "matrix-label";
+        const name = document.createElement("span");
+        name.textContent = m.label;
+        const shape = document.createElement("span");
+        shape.className = "matrix-shape";
+        shape.textContent = m.shape;
+        label.append(name, shape);
+        box.append(label);
+
+        if (m.type === "tokens") {
+          const list = document.createElement("div");
+          list.className = "token-list";
+          m.tokens.forEach((t, i) => {
+            const row = document.createElement("div");
+            row.className = "token-row";
+            const tok = document.createElement("span");
+            tok.className = "token-name";
+            tok.textContent = t;
+            const id = document.createElement("span");
+            id.className = "token-id";
+            id.textContent = `id ${IDS[m.rows[i]]} · row ${m.rows[i]}`;
+            row.append(tok, id);
+            list.append(row);
+          });
+          box.append(list);
+          return box;
+        }
+
+        const table = document.createElement("table");
+        table.className = "matrix-table";
+        table.id = `table_${m.id}`;
+        table.setAttribute("role", "grid");
+        const thead = document.createElement("thead");
+        const htr = document.createElement("tr");
+        htr.append(document.createElement("th"));
+        m.colLabels.forEach((c) => {
+          const th = document.createElement("th");
+          th.textContent = c;
+          htr.append(th);
+        });
+        if (m.sigma) {
+          const th = document.createElement("th");
+          th.className = "sigma-col";
+          th.textContent = "Σ";
+          htr.append(th);
+        }
+        thead.append(htr);
+        table.append(thead);
+
+        const tbody = document.createElement("tbody");
+        m.data.forEach((row, r) => {
+          const tr = document.createElement("tr");
+          tr.id = `row_${m.id}_${r}`;
+          const th = document.createElement("th");
+          th.className = "row-label";
+          th.textContent = m.rowLabels[r];
+          tr.append(th);
+          row.forEach((v, c) => {
+            const td = document.createElement("td");
+            td.id = `cell_${m.id}_${r}_${c}`;
+            td.tabIndex = 0;
+            td.textContent = num(v, m.digits === undefined ? 2 : m.digits);
+            const inspector = () => m.inspect(r, c);
+            td.addEventListener("mouseenter", inspector);
+            td.addEventListener("focus", inspector);
+            td.addEventListener("click", inspector);
+            tr.append(td);
+          });
+          if (m.sigma) {
+            const td = document.createElement("td");
+            td.className = "sigma-cell";
+            td.textContent = num(m.sigma(row), 3);
+            tr.append(td);
+          }
+          tbody.append(tr);
+        });
+        table.append(tbody);
+        box.append(table);
+        return box;
+      }
+
+      function setBoard(items) {
+        const board = byId("calcBoard");
+        board.innerHTML = "";
+        const op = document.createElement("div");
+        op.className = "matrix-operation";
+        items.forEach((item) => {
+          if (item.symbol) {
+            const s = document.createElement("div");
+            s.className = "op-symbol";
+            s.textContent = item.symbol;
+            op.append(s);
+            return;
+          }
+          op.append(matrixBox(item));
+        });
+        board.append(op);
+      }
+
+      const TOKEN = (i) => PROMPT[i].token;
+      const DIMLABEL = (prefix) => DIMS.map((d) => `${prefix}${d}`);
+
+      // ---------- the eight steps ----------
+      const STEPS = [];
+      const step = (title, desc, render, conceptTitle, concept) =>
+        STEPS.push({ title, desc, render, conceptTitle, concept });
+
+      step("Step 1 · Token ids & embedding lookup",
+        "The prompt's five tokens are looked up in the embedding table. The ids are the real ones from the 3,509-token table; this page keeps eight rows so the table fits on a screen.",
+        () => setBoard([
+          { type: "tokens", label: "Prompt tokens (T = 5)", tokens: PROMPT.map((p) => p.token), rows: PROMPT.map((p) => p.row) },
+          { symbol: "→" },
+          { label: `W_embed (8 × 4) · dims ${DIMS.join(", ")}`, shape: "8 × 4", data: W.embed, rowLabels: TOKENS,
+            colLabels: DIMLABEL("d"), id: "embed", digits: 3,
+            inspect: (r, c) => inspectEmbedding(r, c, { row: "embed", cell: "X0" }) },
+          { symbol: "=" },
+          { label: "X₀ (token embeddings)", shape: "5 × 4", data: X0, rowLabels: PROMPT.map((p) => p.token),
+            colLabels: DIMLABEL("d"), id: "X0", digits: 3,
+            inspect: (r, c) => inspectEmbedding(r, c, { row: "embed", cell: "X0" }) },
+        ]),
+        "Embedding lookup is a matrix slice",
+        `One-hot row (5 × 8) times W_embed (8 × 4) selects five rows — that is the entire operation. The numbers are the checkpoint's own embedding rows for these tokens, dimensions ${DIMS.join(", ")} of ${REAL.d_model}.`);
+
+      step("Step 2 · Pre-attention RMSNorm",
+        "Before the projections, each token vector is divided by its root mean square and scaled by the layer's learned gain.",
+        () => setBoard([
+          { label: "X₀", shape: "5 × 4", data: X0, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"), id: "X0raw", digits: 3 },
+          { symbol: "→ RMSNorm →" },
+          { label: "X₀,norm", shape: "5 × 4", data: X0NORM, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
+            id: "X0norm", digits: 3,
+            inspect: (r, c) => inspectNorm(r, c, { src: "X0raw", cell: "X0norm" }, X0, W.norm_attn, ["X₀", "X₀,norm"]) },
+        ]),
+        "RMSNorm: no mean subtraction",
+        `LayerNorm centres by the mean and scales by the standard deviation; RMSNorm only divides by √(mean(x²) + ε) and then multiplies by a learned gain per dimension. The gain here is ${num(W.norm_attn[0], 3)} … ${num(W.norm_attn[3], 3)} and ε = ${EPS}, exactly as <code>nn.RMSNorm</code> is configured in storylm/model.py.`);
+
+      let qkvTab = "Q";
+      const QKV = { Q: ["q", "query"], K: ["k", "key"], V: ["v", "value"] };
+      step("Step 3 · Linear Q, K, V projections",
+        "Each normalised token is multiplied by three 4 × 4 matrices. Dimensions 0–1 belong to head 1, dimensions 2–3 to head 2.",
+        () => {
+          const [prefix, name] = QKV[qkvTab];
+          const out = { Q, K, V: Vm }[qkvTab];
+          const label = { Q: "Q", K: "K", V: "V" }[qkvTab];
+          return setBoard([
+            { label: "X₀,norm", shape: "5 × 4", data: X0NORM, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"), id: "A", digits: 3 },
+            { symbol: "×" },
+            { label: `W_${prefix}`, shape: "4 × 4", data: W[prefix], rowLabels: DIMLABEL("d"), colLabels: DIMLABEL(prefix), id: "B", digits: 3 },
+            { symbol: "=" },
+            { label: `${label} = X₀,norm × W_${prefix}`, shape: "5 × 4", data: out, rowLabels: PROMPT.map((p) => p.token),
+              colLabels: DIMLABEL(prefix), id: "out", digits: 3,
+              inspect: (r, c) => inspectDot(r, c, { row: "A", col: "B", cell: "out" }, X0NORM, W[prefix], out[r][c], label, `W_${prefix}`) },
+          ]);
+        },
+        "Three projections, one per role",
+        `The real block computes all three in one fused 384 × 128 matrix and then splits by head; here they are separate 4 × 4 matrices so each column has a name. Switch the subtab to walk K and V the same way.`);
+
+      step("Step 4 · Rotary position embeddings",
+        "Position is injected by rotating each head's dimension pairs by an angle proportional to the token's position — a rotation, not an added vector.",
+        () => setBoard([
+          { label: "Q before RoPE", shape: "5 × 4", data: Q, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("q"), id: "Qorig", digits: 3 },
+          { symbol: "⟳ rotate by position × inv_freq ⟳" },
+          { label: "Q after RoPE", shape: "5 × 4", data: QROPE, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMS.map((d) => `q${d}′`),
+            id: "Qrope", digits: 3,
+            inspect: (r, c) => inspectRope(r, c, { row: "Qorig", cell: "Qrope" }) },
+        ]),
+        "Why a rotation encodes position",
+        `inv_freq = 1 / 10000<sup>2i/head_dim</sup> (storylm/model.py:32). At head_dim ${HD} that is a single frequency of ${num(INV_FREQ[0], 4)} rad per token (${num(INV_FREQ[0] * 180 / Math.PI, 1)}°), applied to <em>both</em> heads' pairs — the real head_dim 16 rotates eight pairs per head. When a rotated query meets a rotated key, the dot product depends on the <em>difference</em> of their positions.`);
+
+      let headTab = 0;
+      step("Step 5 · Causal scaled dot-product attention",
+        "Inside each head: scores, a causal mask, a per-row softmax, and a weighted sum of the values.",
+        () => {
+          const h = HEADDETAIL[headTab];
+          const masked = h.rows.map((r, i) => r.raw.map((v, j) => (j > i ? 0 : v)));
+          return setBoard([
+            { label: `Scores Q·Kᵀ / √${HD} (head ${headTab + 1}, future masked)`, shape: "5 × 5", data: masked,
+              rowLabels: PROMPT.map((p) => p.token), colLabels: PROMPT.map((p) => p.token), id: "S", digits: 3,
+              inspect: (r, c) => inspectAttention(headTab, r, c, { cell: "S" }) },
+            { symbol: "softmax →" },
+            { label: `A (head ${headTab + 1})`, shape: "5 × 5", data: h.probs, rowLabels: PROMPT.map((p) => p.token),
+              colLabels: PROMPT.map((p) => p.token), id: "Aattn", digits: 3, sigma: (row) => row.reduce((a, b) => a + b, 0),
+              inspect: (r, c) => inspectAttention(headTab, r, c, { cell: "Aattn" }) },
+            { symbol: "× V →" },
+            { label: `Context (head ${headTab + 1})`, shape: "5 × 2", data: h.context, rowLabels: PROMPT.map((p) => p.token),
+              colLabels: [`v${headTab * HD}`, `v${headTab * HD + 1}`], id: "Ohead", digits: 3,
+              inspect: (r, c) => inspectContext(headTab, r, c, { cell: "Ohead" }) },
+          ]);
+        },
+        "Two heads, two attention patterns",
+        `Each head has its own Q/K/V columns, its own 5 × 5 weights and its own 2-dimensional context; the two contexts are concatenated into the 5 × 4 matrix used next. The Σ column shows each row summing to 1 — the softmax runs per row, per head (the five displayed weights are rounded to three decimals, so the column is what you check sums to 1).`);
+
+      step("Step 6 · Output projection and residual",
+        "The concatenated context is projected back to model width, then added to the block's input.",
+        () => setBoard([
+          { label: "Context (heads concatenated)", shape: "5 × 4", data: O, rowLabels: PROMPT.map((p) => p.token),
+            colLabels: DIMS.map((d) => `v${d}`), id: "Ocat", digits: 3 },
+          { symbol: "× W_proj →" },
+          { label: "Y_attn", shape: "5 × 4", data: YATTN, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMS.map((d) => `y${d}`),
+            id: "Yattn", digits: 3,
+            inspect: (r, c) => inspectDot(r, c, { row: "Ocat", col: "Wproj", cell: "Yattn" }, O, W.proj, YATTN[r][c], "Y_attn", "W_proj") },
+          { symbol: "+ X₀ =" },
+          { label: "X₁ = X₀ + Y_attn", shape: "5 × 4", data: X1, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
+            id: "X1", digits: 3,
+            inspect: (r, c) => inspectResidual(r, c, { cell: "X1" }, X0, YATTN, X1, "X₁", "X₀", "Y_attn") },
+        ]),
+        "The residual highway",
+        `Attention <em>modifies</em> the stream rather than replacing it: X₁ = X₀ + Attention(X₀). In the real model each of the eight blocks does this, which is why the original token identity is still visible in the logit lens after layer 5 (see the note at the bottom).`);
+
+      step("Step 7 · Feed-forward network",
+        "A second RMSNorm, a 4 → 8 expansion, GELU, an 8 → 4 contraction, and a second residual add.",
+        () => setBoard([
+          { label: "X₁,norm", shape: "5 × 4", data: X1NORM, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
+            id: "X1norm", digits: 3,
+            inspect: (r, c) => inspectNorm(r, c, { src: "X1normsrc", cell: "X1norm" }, X1, W.norm_ffn, ["X₁", "X₁,norm"]) },
+          { symbol: "× W_up → GELU →" },
+          { label: "GELU activations (5 × 8)", shape: "5 × 8", data: GELUED, rowLabels: PROMPT.map((p) => p.token),
+            colLabels: Array.from({ length: 8 }, (_, i) => `h${i}`), id: "GELU", digits: 3,
+            inspect: (r, c) => inspectGelu(r, c, { cell: "GELU" }) },
+          { symbol: "× W_down + X₁ =" },
+          { label: "X₂ (block output)", shape: "5 × 4", data: X2, rowLabels: PROMPT.map((p) => p.token), colLabels: DIMLABEL("d"),
+            id: "X2", digits: 3,
+            inspect: (r, c) => inspectResidual(r, c, { cell: "X2" }, X1, YFFN, X2, "X₂", "X₁", "Y_ffn") },
+        ]),
+        "Attention mixes tokens; the FFN mixes dimensions",
+        `W_up and W_down are independent matrices, as in the real block (there 128 → 512 → 128; here 4 → 8 → 4, the same shape in a size you can read). This is the last operation of block 1 — blocks 2 to ${REAL.layers} repeat steps 2–7 on X₂.`);
+
+      step("Step 8 · Final norm and the tied head",
+        "After the last block, only the final token's vector is scored against the vocabulary. The head reuses W_embed, so every logit is a dot product with a token's own embedding row.",
+        () => setBoard([
+          { label: `Last vector x${PROMPT.length - 1},norm (${PROMPT[PROMPT.length - 1].token})`, shape: "1 × 4", data: [LAST],
+            rowLabels: [PROMPT[PROMPT.length - 1].token], colLabels: DIMLABEL("d"), id: "last", digits: 3 },
+          { symbol: "× W_embedᵀ =" },
+          { label: "Logits (1 × 8)", shape: "1 × 8", data: [LOGITS], rowLabels: ["logits"], colLabels: TOKENS,
+            id: "logits", digits: 3,
+            inspect: (r, c) => inspectLogit(c, { cell: "logits" }) },
+        ]),
+        "Softmax, and what the real model predicts",
+        `<div class="prob-row">${TOKENS.map((t, i) => `<span class="prob-chip${i === WIN_INDEX ? " is-win" : ""}"><span class="chip-token">${esc(t)}</span><span class="chip-pct">${pct(PROBS[i])}</span></span>`).join("")}</div>
+         <p><strong>One block, four dimensions, and the answer is already right.</strong> The toy's argmax is <code>${esc(WINNER)}</code> at ${pct(PROBS[WIN_INDEX])}; the shipped model on all ${REAL.d_model} dimensions and all ${REAL.layers} blocks gives <code>${esc(T.real_model.next_token[0].token)}</code> ${pct(T.real_model.next_token[0].p)} (logit ${num(T.real_model.next_token[0].logit, 2)}). Both agree: after the prompt tags the story starts with a line. The full model needs six of its eight layers to get there — the note below has the layer-by-layer numbers.</p>`);
+
+      // ---------- provenance ----------
+      function renderProvenance() {
+        const host = byId("provenance");
+        const toys = T.toy;
+        const counter = T.dims_0_4_counterexample;
+        const lens = T.real_model.logit_lens;
+        const line = toys.probs_one_block["<LINE>"];
+        const help = toys.probs_one_block["<THEME=HELP>"];
+        const first = T.real_model.next_token[0];
+        host.innerHTML = `
+          <div class="prov-grid">
+            <div>
+              <h3>Where these weights come from</h3>
+              <p>
+                Nothing on this page is invented. Every matrix is a slice of the shipped checkpoint
+                <code>${esc(T.checkpoint)}</code> — block ${T.block + 1} of ${REAL.layers}, dimensions
+                <strong>${DIMS.join(", ")}</strong> of ${REAL.d_model}. The ids are the real ones
+                (<code>&lt;LINE&gt;</code> is id ${IDS[TOKENS.indexOf("<LINE>")]}, <code>the</code> is id
+                ${IDS[TOKENS.indexOf("the")]}), the norms carry their learned gains with ε = ${EPS},
+                GELU is the erf form <code>F.gelu</code> uses, and W_up / W_down are independent matrices.
+                Regenerate with <code>.venv/bin/python training/export_matrix_toy.py</code>.
+              </p>
+            </div>
+            <div>
+              <h3>Why these four dimensions</h3>
+              <p>
+                The <em>first</em> four dimensions do not work: they carry the prompt's own last token, and one
+                truncated block cannot move off it. Dimensions 0–3 predict
+                <code>&lt;THEME=HELP&gt;</code> at ${pct(counter.probs_one_block["<THEME=HELP>"])}
+                (with <code>&lt;LINE&gt;</code> at ${pct(counter.probs_one_block["<LINE>"])}).
+                Dimensions ${DIMS.join(", ")} are where the model's <em>decision</em> survives the truncation:
+                one block predicts <code>&lt;LINE&gt;</code> at ${pct(line)} against
+                <code>&lt;THEME=HELP&gt;</code> at ${pct(help)}, and all ${REAL.layers} real blocks truncated to
+                the same four dimensions agree (${pct(toys.probs_eight_blocks["<LINE>"])}).
+                The slice is found by search, not by hand:
+                <code>export_matrix_toy.py --search</code> prints every window.
+              </p>
+            </div>
+            <div>
+              <h3>One block of eight: where the decision flips</h3>
+              <p>
+                Steps 1–7 walk a single block; the model stacks ${REAL.layers}. Logit lens — the final norm and
+                the tied head applied to every layer's last-token vector:
+              </p>
+              <div class="table-scroll">
+                <table class="lens-table">
+                  <thead><tr><th>after layer</th><th>&lt;THEME=HELP&gt;</th><th>&lt;LINE&gt;</th><th>argmax</th></tr></thead>
+                  <tbody>
+                    ${lens.map((row) => `<tr><td>${row.layer === 0 ? "0 (embedding)" : row.layer}</td><td class="mono">${num(row.logits["<THEME=HELP>"], 1)}</td><td class="mono">${num(row.logits["<LINE>"], 1)}</td><td>${esc(row.argmax)}</td></tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+              <p class="muted-small">The prompt's own token dominates early; <code>&lt;LINE&gt;</code> takes over at layer ${(lens.find((r) => r.argmax === "<LINE>") || { layer: "?" }).layer}.</p>
+            </div>
+          </div>
+          <div class="prov-refs">
+            <div>
+              <h3>The shipped model's answer for this prompt</h3>
+              <div class="table-scroll">
+                <table class="lens-table">
+                  <thead><tr><th>token</th><th>logit</th><th>probability</th></tr></thead>
+                  <tbody>
+                    ${T.real_model.next_token.map((d) => `<tr><td class="mono">${esc(d.token)}</td><td class="mono">${num(d.logit, 2)}</td><td class="mono">${pct(d.p)}</td></tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3>Reference values this page reproduces</h3>
+              <ul class="prov-list">
+                <li>Toy block, one block: argmax <code>${esc(toys.argmax_one_block)}</code>, <code>&lt;LINE&gt;</code> ${pct(line)}.</li>
+                <li>All ${REAL.layers} real blocks, truncated to dimensions ${DIMS.join(", ")}: argmax <code>${esc(toys.argmax_eight_blocks)}</code>, <code>&lt;LINE&gt;</code> ${pct(toys.probs_eight_blocks["<LINE>"])}.</li>
+                <li>Full model, ${REAL.d_model} dimensions, ${REAL.layers} blocks: <code>${esc(first.token)}</code> ${pct(first.p)} (logit ${num(first.logit, 2)}).</li>
+                <li>Every cell above is computed in your browser from those weights; the export records what the Python run got so the two can be compared.</li>
+              </ul>
+            </div>
+          </div>`;
+      }
+
+      // ---------- stepper, subtabs, keyboard, deep links ----------
+      let current = 0;
+      function renderStepper() {
+        const nav = byId("stepperNav");
+        nav.innerHTML = "";
+        STEPS.forEach((s, i) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "step-btn" + (i === current ? " active" : "");
+          if (i === current) btn.setAttribute("aria-current", "step");
+          btn.textContent = s.title;
+          btn.addEventListener("click", () => renderStep(i));
+          nav.append(btn);
+        });
+      }
+
+      function renderSubtabs(index) {
+        const holder = byId("subtabsContainer");
+        holder.innerHTML = "";
+        const spec = index === 2
+          ? { labels: ["Q", "K", "V"], active: qkvTab, pick: (v) => { qkvTab = v; } }
+          : index === 4
+            ? { labels: ["Head 1", "Head 2"], active: `Head ${headTab + 1}`, pick: (v) => { headTab = Number(v.slice(-1)) - 1; } }
+            : null;
+        if (!spec) {
+          holder.style.display = "none";
+          return;
+        }
+        holder.style.display = "flex";
+        spec.labels.forEach((label) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "subtab-btn" + (label === spec.active ? " active" : "");
+          btn.textContent = label;
+          btn.addEventListener("click", () => { spec.pick(label); renderStep(current); });
+          holder.append(btn);
+        });
+      }
+
+      function renderStep(index) {
+        current = index;
+        const s = STEPS[index];
+        renderStepper();
+        byId("stepTitle").textContent = s.title;
+        byId("stepDesc").textContent = s.desc;
+        byId("conceptTitle").textContent = s.conceptTitle;
+        byId("conceptBody").innerHTML = s.concept;
+        byId("stepCounter").textContent = `Step ${index + 1} of ${STEPS.length}`;
+        byId("prevBtn").disabled = index === 0;
+        byId("nextBtn").textContent = index === STEPS.length - 1 ? "Start over ↺" : "Next step →";
+        renderSubtabs(index);
+        s.render();
+        renderProvenance();
+        clearHighlights();
+        byId("inspectTitle").textContent = "Interactive cell inspector";
+        byId("inspectSteps").innerHTML = tagRow("Guide", "Hover, click or tab onto any cell of the result matrix to see that cell's arithmetic.");
+        byId("inspectEval").textContent = "";
+        byId("inspectHint").textContent = `Every number here is computed in your browser from ${REAL.d_model}-dimension weights of the shipped checkpoint, truncated to dimensions ${DIMS.join(", ")}.`;
+        history.replaceState(null, "", `#step-${index + 1}`);
+      }
+
+      const goToStep = (i) => { if (i >= 0 && i < STEPS.length) renderStep(i); };
+      window.goToStep = goToStep;
+      window.nextStep = () => renderStep(current === STEPS.length - 1 ? 0 : current + 1);
+      window.prevStep = () => renderStep(current === 0 ? 0 : current - 1);
+
+      document.addEventListener("keydown", (e) => {
+        const el = e.target;
+        if (el instanceof Element && el.matches("input, textarea, [contenteditable]")) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === "ArrowRight") window.nextStep();
+        else if (e.key === "ArrowLeft") window.prevStep();
+      });
+      window.addEventListener("hashchange", () => {
+        const m = /^#step-(\d+)$/.exec(location.hash);
+        if (m) goToStep(Number(m[1]) - 1);
+      });
+
+      // Exposed for headless checks and for anyone poking at the numbers in the console.
+      window.MatrixWalkthrough = {
+        toy: T, X0, X0NORM, Q, K, V: Vm, QROPE, KROPE, heads: HEADDETAIL, O, YATTN, X1,
+        X1NORM, UPPRE, GELUED, YFFN, X2, X2NORM, LAST, logits: LOGITS, probs: PROBS,
+        winner: WINNER, steps: STEPS,
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const heroDims = byId("heroDims");
+        if (heroDims) heroDims.textContent = `${DIMS[0]}–${DIMS[DIMS.length - 1]}`;
+        const m = /^#step-(\d+)$/.exec(location.hash);
+        renderStep(m ? Math.min(Math.max(Number(m[1]) - 1, 0), STEPS.length - 1) : 0);
+      });
+    })();
+  </script>
+</body>
+</html>

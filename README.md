@@ -114,6 +114,7 @@ storylm/
 │   ├── train_model.py            # Local PyTorch training loop (AdamW, Cosine LR)
 │   ├── prepare_data.py           # Corpus tokenization & .npz dataset packing
 │   ├── export_story.py           # Full fp16 weights + prompts -> web/story_data.js
+│   ├── export_matrix_toy.py      # 4-dim toy block + reference numbers -> web/matrix_toy_data.js
 │   ├── modal_train.py            # Scalable Cloud GPU training script (Modal)
 │   ├── memorisation.py           # Overfitting / memorisation audit (`make audit`)
 │   └── sample.py                 # Evaluation & sampling harness
@@ -121,6 +122,8 @@ storylm/
 ├── web/                          # Standalone Interactive Web Visualizer
 │   ├── index.html                # Main page: Story Studio, Architecture, Comparison
 │   ├── walkthrough.html          # 30-step forward-pass walkthrough (linked from the main page)
+│   ├── matrix_walkthrough.html   # the same block at 4 dimensions, cell by cell, with an inspector
+│   ├── matrix_toy_data.js        # the toy block's weights (exported from the real checkpoint)
 │   ├── styles.css                # Shared page styles
 │   ├── walkthrough.css           # Walkthrough-specific styles
 │   ├── story.js                  # Vanilla-JS port of the model: live in-browser generation
@@ -249,6 +252,11 @@ python cli.py audit --checkpoint checkpoints/embedded_v4.pt \
     --corpus data/processed/train.jsonl --packed data/processed/train_v4.npz
 ```
 
+The same weights drive three browser pages: Story Studio (live generation), the 30-step
+walkthrough (a real forward pass at full width) and the matrix walkthrough (one block at
+four dimensions, where every multiply is inspectable cell by cell — `make matrix-toy`
+regenerates its slice and its reference numbers from the checkpoint).
+
 Measured on the shipped v4 checkpoint (225 generated stories): held-out loss equal to
 training loss (gap +0.001 nats), shared line-runs at the engine's own baseline (mean 11.69
 against 11.78, so nothing was copied), every generated word one the corpus uses (100.0 %),
@@ -263,7 +271,9 @@ python cli.py story --raw   # smoke-check sampling from the new checkpoint
 python training/export_story.py   # defaults to the newest checkpoint; --vocab pins the table
 ```
 `web/story_data.js` is the single source of truth: Story Studio generates from it and the
-walkthrough computes every displayed number from it in the browser.
+walkthrough computes every displayed number from it in the browser. The matrix walkthrough
+reads `web/matrix_toy_data.js` instead — a 4-dimension slice of the same checkpoint plus the
+reference numbers it must reproduce (`make matrix-toy`).
 
 ---
 
