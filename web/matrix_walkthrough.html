@@ -735,16 +735,39 @@
         byId("inspectHint").textContent = hint;
       }
 
-      function inspectEmbedding(row, col, ids) {
+      // Step 1 has two directions: a cell of X₀ points back at the embedding row it
+      // was copied from (row index and embedding row are different numbers — the
+      // prompt's tokens live on rows 1-5 of the table while X₀ counts 0-4), and a
+      // cell of the table itself describes that row.
+      function inspectEmbedding(row, col, ids, fromTable) {
         clearHighlights();
+        if (fromTable) {
+          const token = TOKENS[row], id = IDS[row];
+          const inPrompt = PROMPT.findIndex((p) => p.row === row);
+          mark(`cell_${ids.row}_${row}_${col}`, "active-cell");
+          if (inPrompt >= 0) {
+            mark(`row_${ids.cell}_${inPrompt}`, "highlighted-row");
+            mark(`cell_${ids.cell}_${inPrompt}_${col}`, "active-cell");
+          }
+          showInspect(`Embedding table, row ${row}: ${token} (id ${id})`,
+            tagRow("Cell", `W_embed[${row}][${col}] = <strong>${num(W.embed[row][col], 3)}</strong>`)
+            + tagRow("Prompt token?", inPrompt >= 0
+              ? `Yes — this row <em>is</em> row ${inPrompt} of X₀ (same four numbers, copied).`
+              : "No — the prompt does not use this token, so no row of X₀ comes from it."),
+            `= ${num(W.embed[row][col], 3)}`,
+            inPrompt >= 0
+              ? `Row ${row} of W_embed and row ${inPrompt} of X₀ are highlighted: the lookup copies these four numbers across.`
+              : "Only the five prompt rows are copied out of this table; the rest are here for context (and for the tied output head).");
+          return;
+        }
         const p = PROMPT[row];
-        mark(`row_${ids.row}_${row}`, "highlighted-row");
+        mark(`row_${ids.row}_${p.row}`, "highlighted-row");
         mark(`cell_${ids.cell}_${row}_${col}`, "active-cell");
         showInspect(`Embedding lookup: ${p.token} (row ${row}, dimension ${DIMS[col]})`,
           tagRow("Token id", `<code>${esc(p.token)}</code> is id <strong>${p.id}</strong> in the 3,509-token table, and row ${p.row} of this page's 8-row table.`)
           + tagRow("Lookup", `X₀[${row}][${col}] = W_embed[${p.row}][${col}] = <strong>${num(X0[row][col], 3)}</strong>`),
           `= ${num(X0[row][col], 3)}`,
-          "Selecting a row is a matrix slice: the one-hot vector of this id times W_embed.");
+          `Row ${p.row} of W_embed is highlighted — that is the row X₀'s row ${row} was copied from.`);
       }
 
       function inspectNorm(row, col, ids, src, gain, labels) {
@@ -985,11 +1008,11 @@
           { symbol: "→" },
           { label: `W_embed (8 × 4) · dims ${DIMS.join(", ")}`, shape: "8 × 4", data: W.embed, rowLabels: TOKENS,
             colLabels: DIMLABEL("d"), id: "embed", digits: 3,
-            inspect: (r, c) => inspectEmbedding(r, c, { row: "embed", cell: "X0" }) },
+            inspect: (r, c) => inspectEmbedding(r, c, { row: "embed", cell: "X0" }, true) },
           { symbol: "=" },
           { label: "X₀ (token embeddings)", shape: "5 × 4", data: X0, rowLabels: PROMPT.map((p) => p.token),
             colLabels: DIMLABEL("d"), id: "X0", digits: 3,
-            inspect: (r, c) => inspectEmbedding(r, c, { row: "embed", cell: "X0" }) },
+            inspect: (r, c) => inspectEmbedding(r, c, { row: "embed", cell: "X0" }, false) },
         ]),
         "Embedding lookup is a matrix slice",
         `One-hot row (5 × 8) times W_embed (8 × 4) selects five rows — that is the entire operation. The numbers are the checkpoint's own embedding rows for these tokens, dimensions ${DIMS.join(", ")} of ${REAL.d_model}.`);
