@@ -9,6 +9,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .studio-speak { background: var(--paper-2); color: var(--ink); border: 1px solid var(--line); margin-left: 8px; }
+    .studio-line.is-speaking { background: var(--accent-soft); border-radius: 4px; }
+    .studio-speak-note { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); margin-top: 8px; }
+  </style>
   <!-- Vercel Web Analytics -->
   <script>
     window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -28,6 +33,7 @@
         <li><a href="#training">Training</a></li>
         <li><a href="walkthrough.html">Walkthrough</a></li>
         <li><a href="matrix_walkthrough.html">Matrix Math</a></li>
+        <li><a href="narration.html">Narration</a></li>
         <li><a href="#comparison">Comparison</a></li>
       </ul>
     </div>
@@ -80,6 +86,7 @@
           <p class="studio-label">Theme</p>
           <div class="studio-chips" id="studio-theme"></div>
           <button class="studio-go" id="studio-generate" type="button">Tell a story</button>
+          <button class="studio-go studio-speak" id="studio-speak" type="button">Read aloud</button>
           <div class="studio-out" id="studio-output"></div>
           <div class="studio-stats" id="studio-stats"></div>
         </div>
@@ -811,7 +818,47 @@
     </div>
   </footer>
 
+  <script src="narration.js"></script>
   <script src="story_data.js"></script>
   <script src="story.js"></script>
+  <script>
+    // Read the generated story aloud with the device's own rule: whole-line clips where
+    // they exist, word clips for the rest. The clips load on first use (~9 MB).
+    (() => {
+      const btn = document.getElementById("studio-speak");
+      const out = document.getElementById("studio-output");
+      const note = document.createElement("div");
+      note.className = "studio-speak-note";
+      btn.parentElement.append(note);
+      let speaking = false;
+
+      const lines = () => [...out.querySelectorAll(".studio-line")].map((el) => el.textContent.trim()).filter(Boolean);
+      const highlight = (i) => {
+        [...out.querySelectorAll(".studio-line")].forEach((el, j) => el.classList.toggle("is-speaking", j === i));
+      };
+
+      btn.addEventListener("click", async () => {
+        if (speaking) { Narration.stop(); speaking = false; btn.textContent = "Read aloud"; highlight(-1); note.textContent = ""; return; }
+        const story = lines();
+        if (!story.length) { note.textContent = "generate a story first"; return; }
+        try {
+          if (!Narration.ready()) {
+            note.textContent = "loading narration clips (≈9 MB, once)…";
+            await Narration.load((set, frac, meta) => {
+              note.textContent = "loading narration clips… " + set + (frac ? ` ${(meta.bytes / 1048576).toFixed(1)} MB` : "");
+            });
+          }
+          speaking = true;
+          btn.textContent = "Stop reading";
+          const report = await Narration.play(story, { mode: "hybrid", onLine: highlight });
+          speaking = false; btn.textContent = "Read aloud"; highlight(-1);
+          note.textContent = `${report.seconds.toFixed(0)} s · ${report.lineClips} whole-line clips + ${report.wordLines} lines from word clips`;
+        } catch (e) {
+          speaking = false; btn.textContent = "Read aloud";
+          note.textContent = "narration failed: " + e.message;
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

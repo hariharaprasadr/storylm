@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoryLM — Narration lab</title>
+  <meta name="description" content="Hear StoryLM's narration: word clips and whole-line clips rendered offline with Kokoro-82M from the closed 3,450-word table, played back with the same rule the device uses, with the measured device cost of every configuration.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .nar-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; margin-top: 22px; }
+    .nar-card h3 { font-family: var(--font-display); font-size: 1.15rem; margin: 0 0 10px; }
+    .nar-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+    .nar-btn { font-family: var(--font-mono); font-size: 0.82rem; padding: 9px 16px; border-radius: 8px;
+               border: 1px solid var(--line); background: var(--paper-2); color: var(--ink); cursor: pointer; }
+    .nar-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .nar-btn:disabled { opacity: 0.5; cursor: default; }
+    .nar-select, .nar-input { font-family: var(--font-mono); font-size: 0.82rem; padding: 8px 10px;
+                              border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+    .nar-status { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+    .nar-read { margin-top: 14px; border-left: 3px solid var(--line); padding-left: 14px; max-height: 340px; overflow-y: auto; }
+    .nar-read p { margin: 6px 0; font-size: 1rem; line-height: 1.5; color: var(--muted); transition: all 0.2s ease; }
+    .nar-read p.is-line { color: var(--ink); font-weight: 500; background: var(--accent-soft); border-radius: 4px; }
+    .nar-read p .tag { font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
+                       color: var(--accent-ink); margin-right: 8px; }
+    .nar-read p .tag.words { color: #31598f; }
+    .nar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    table.nar-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    table.nar-table th, table.nar-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line-soft); }
+    table.nar-table th { color: var(--muted); font-weight: 500; }
+    table.nar-table td.mono, table.nar-table th.mono { font-family: var(--font-mono); }
+    .nar-table .ok { color: #1d7484; font-weight: 600; }
+    .nar-table .no { color: #b8501f; font-weight: 600; }
+    .nar-voice { display: flex; flex-wrap: wrap; gap: 8px; }
+    .nar-voice button { min-width: 150px; }
+    .nar-note { color: var(--muted); font-size: 0.85rem; line-height: 1.6; margin-top: 10px; }
+    .table-scroll { overflow-x: auto; }
+    .table-scroll table.nar-table { min-width: 620px; }
+    @media (max-width: 640px) { .nar-select, .nar-input { max-width: 100%; min-width: 0 !important; } }
+    .nar-bar { height: 6px; background: var(--paper-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+    .nar-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s ease; }
+  </style>
+</head>
+<body>
+
+  <header class="site-nav">
+    <div class="container nav-inner">
+      <a class="wordmark" href="index.html">Story<em>LM</em></a>
+      <ul class="nav-links">
+        <li><a href="index.html#story">Story Studio</a></li>
+        <li><a href="index.html#architecture">Architecture</a></li>
+        <li><a href="index.html#components">Components</a></li>
+        <li><a href="index.html#training">Training</a></li>
+        <li><a href="walkthrough.html">Walkthrough</a></li>
+        <li><a href="matrix_walkthrough.html">Matrix Math</a></li>
+        <li><a href="narration.html" aria-current="page" style="color:var(--accent);font-weight:600;">Narration</a></li>
+        <li><a href="index.html#comparison">Comparison</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="walkthrough-hero">
+      <div class="container">
+        <span class="badge">Narration lab</span>
+        <h1 class="hero-title" style="font-size: 2.3rem; margin: 4px 0 12px;">Hear the story</h1>
+        <p class="hero-sub" style="max-width: 860px;">
+          The device cannot speak with a neural voice at runtime — narration is pre-recorded clips in
+          flash. So the clips are rendered <em>offline</em> from the closed 3,450-word table
+          (<strong>Kokoro-82M</strong>, Apache-2.0, one fixed voice) and played back with the rule the
+          firmware will use: a whole-line clip when the line is one the engine knows, otherwise the line
+          assembled word by word. Everything you hear on this page is those clips; no server is involved.
+        </p>
+        <div class="nar-controls" style="margin-top: 18px;">
+          <button class="nar-btn primary" id="nar-load">Load narration (≈9 MB, once)</button>
+          <span class="nar-status" id="nar-load-status">not loaded yet — the clips are fetched only when you ask</span>
+        </div>
+        <div class="nar-bar" id="nar-bar"><span></span></div>
+      </div>
+    </section>
+
+    <section class="walkthrough-content">
+      <div class="container">
+
+        <div class="nar-card">
+          <h3>1 · Play a story</h3>
+          <p class="nar-note">
+            Three stories the shipped model actually generated. <strong>Words only</strong> speaks every line
+            by concatenating word clips (complete coverage, list rhythm). <strong>Words + hot lines</strong>
+            plays the ~100 most-used lines from whole-line clips and falls back to words for the rest — the
+            device's real path, and the one that lands at a natural pace.
+          </p>
+          <div class="nar-controls">
+            <select class="nar-select" id="nar-story">
+              <option value="story1">Story 1 — 22 lines, Bluey / bedtime</option>
+              <option value="story2">Story 2 — 23 lines</option>
+              <option value="story3">Story 3 — 22 lines</option>
+            </select>
+            <select class="nar-select" id="nar-mode">
+              <option value="hybrid">Words + hot-line clips</option>
+              <option value="words">Words only</option>
+            </select>
+            <button class="nar-btn primary" id="nar-play">Play</button>
+            <button class="nar-btn" id="nar-stop">Stop</button>
+            <span class="nar-status" id="nar-play-status"></span>
+          </div>
+          <div class="nar-read" id="nar-read"></div>
+        </div>
+
+        <div class="nar-card">
+          <h3>2 · What this costs on the device</h3>
+          <p class="nar-note">
+            Measured from the actual clips: the word library is 3,450 clips, mean 0.658 s (37.8 min of audio);
+            the 100 hot lines are 6.4 min. The 8 MB part leaves about <strong>4.4 MB</strong> for voice
+            (app ≈2.25 MB + INT4 model 1.05 MB + metadata ≈0.2 MB) — the plan currently allocates 2 MB.
+          </p>
+          <div class="table-scroll">
+            <table class="nar-table">
+              <thead>
+                <tr><th>configuration</th><th class="mono">16 kHz ADPCM</th><th class="mono">8 kHz ADPCM</th>
+                    <th class="mono">Opus 16 kbps</th><th class="mono">Opus 12 kbps</th><th>8 MB part</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>100 hot lines only</td><td class="mono">3.00 MB</td><td class="mono">1.50 MB</td><td class="mono">0.73 MB</td><td class="mono">0.55 MB</td><td class="ok">fits</td></tr>
+                <tr><td>all 3,450 words (100 % coverage)</td><td class="mono">17.73 MB</td><td class="mono">8.86 MB</td><td class="mono">4.33 MB</td><td class="mono">3.25 MB</td><td class="no">only Opus</td></tr>
+                <tr><td>all words + 100 hot lines</td><td class="mono">20.73 MB</td><td class="mono">10.36 MB</td><td class="mono">5.06 MB</td><td class="mono">3.79 MB</td><td class="no">Opus 12k</td></tr>
+                <tr><td>top-1,164 words (99 %) + hot lines</td><td class="mono">8.99 MB</td><td class="mono">4.49 MB</td><td class="mono">2.19 MB</td><td class="mono">1.65 MB</td><td class="ok">ADPCM 8k</td></tr>
+                <tr><td>top-700 words (95 %) + hot lines</td><td class="mono">6.54 MB</td><td class="mono">3.27 MB</td><td class="mono">1.60 MB</td><td class="mono">1.20 MB</td><td class="ok">comfortable</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="nar-note">
+            The render on this page is the 24 kbps / 32 kbps MP3 the browser can play: 7.4 MB of words and
+            1.5 MB of hot lines, fetched once. The device would store the same clips as IMA ADPCM (no decoder)
+            or Opus (needs a decoder). <strong>Rendering words inside a carrier phrase and cutting them out
+            halves the library</strong> (measured 0.32 s vs 0.658 s per word) — that is what makes 8 kHz ADPCM
+            viable for a 99 % word set.
+          </p>
+        </div>
+
+        <div class="nar-card">
+          <h3>3 · Hear any word</h3>
+          <p class="nar-note">Every word of the closed table has a clip. Type one (or pick from the list) and hear it.</p>
+          <div class="nar-controls">
+            <input class="nar-input" id="nar-word" list="nar-wordlist" placeholder="e.g. moonlight" size="22">
+            <datalist id="nar-wordlist"></datalist>
+            <button class="nar-btn primary" id="nar-word-play">Play word</button>
+            <span class="nar-status" id="nar-word-info"></span>
+          </div>
+        </div>
+
+        <div class="nar-card">
+          <h3>4 · Whole line vs assembled from words</h3>
+          <p class="nar-note">
+            The same sentence, played the two ways. The whole-line clip is a natural sentence; the word-by-word
+            assembly is what happens for the lines that are not in the hot set (~40 % of a story's lines).
+          </p>
+          <div class="nar-controls">
+            <select class="nar-select" id="nar-line" style="min-width: 420px; max-width: 100%;"></select>
+            <button class="nar-btn primary" id="nar-line-play">Whole line</button>
+            <button class="nar-btn" id="nar-line-words">Assembled from words</button>
+            <span class="nar-status" id="nar-line-status"></span>
+          </div>
+        </div>
+
+        <div class="nar-card">
+          <h3>5 · Pick a voice</h3>
+          <p class="nar-note">
+            Seven Kokoro voices, each saying three words and one line. The library shipped above is
+            <code>af_heart</code>; re-rendering the whole vocabulary for another voice costs about 9 minutes
+            of CPU.
+          </p>
+          <div class="nar-voice" id="nar-voices"></div>
+        </div>
+
+        <div class="nar-card">
+          <h3>6 · What the measurements showed</h3>
+          <div class="nar-grid">
+            <div>
+              <p class="nar-note">
+                <strong>Pace.</strong> The same 240-word story takes <strong>177 s</strong> word-by-word
+                against <strong>111 s</strong> at the reference narration pace; with the hot-line tier it lands
+                at <strong>118 s</strong>.
+              </p>
+              <p class="nar-note">
+                <strong>Every word is its own sentence.</strong> A bare word is synthesised as a complete
+                utterance: 75 % of the 3,450 clips end on a pitch fall of more than 20 Hz.
+              </p>
+            </div>
+            <div>
+              <p class="nar-note">
+                <strong>Joins are clean.</strong> Clip onsets start from silence (sample step 0.00 against
+                0.038 inside clips), so concatenation clicks are not the problem — the rhythm is.
+              </p>
+              <p class="nar-note">
+                <strong>Loudness.</strong> Per-clip RMS spreads 1.49× (p90/p10), so per-clip gain is worth
+                adding before packing.
+              </p>
+            </div>
+            <div>
+              <p class="nar-note">
+                <strong>Intelligibility (proxy).</strong> Whisper-tiny.en transcribed the word-by-word story at
+                11.2 % WER and the hot-line version at 6.2 % — the ASR's own floor inflates both, but the
+                hybrid halves the errors.
+              </p>
+              <p class="nar-note">
+                <strong>These are synthetic takes.</strong> Kokoro-82M (Apache-2.0) rendered offline; the plan
+                is still to re-record with a human voice. The clips here are a distributable stand-in.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p class="footer-title">Decoder-only 2.02M Transformer</p>
+      <p class="footer-line">Narration: Kokoro-82M takes, packed as word and whole-line clips · playback rule shared with the firmware</p>
+      <p class="footer-line">
+        <a href="https://github.com/hariharaprasadr/storylm">github.com/hariharaprasadr/storylm</a>
+        &nbsp;&middot;&nbsp; <a href="index.html">Back to the main page</a> for live inference in your browser
+      </p>
+    </div>
+  </footer>
+
+  <script src="narration.js"></script>
+  <script>
+    "use strict";
+    const STORIES = {"story1":["Evening settled quietly over the house as Bluey stood in the backyard.","Bluey smoothed out the wrinkles in the quilt and rested their head.","Bluey shook out the pillow and punched it into a comfy shape.","Bluey let the busy events of the day fade away like mist.","A pale silver moon climbed above the roof, casting quiet silver ribbons.","Outside, the evening sky turned from dusky purple to deep velvety blue.","Mackenzie felt a bit nervous about the shadowy corner in the hallway.","Mackenzie was having trouble untangling the big pile of dress-up blankets.","Mackenzie came over quickly and offered a helping hand without hesitation.","Together they gathered the scattered pieces and sorted them by size.","They took turns holding the edges steady so nothing slipped away.","With teamwork and care, every little detail fell smoothly into place.","They double-checked their work and gave each other an appreciative nod.","The problem was completely solved, and both puppies smiled warmly.","Mackenzie snuggled close, safe and content in the familiar room.","A gentle wave of relief washed over them as they hugged goodbye.","Everything in the backyard felt chilly and calm.","Bluey squeezed a woolly quilt and set it down again.","There was plenty of time to roar in the sleepy backyard.","Heavy eyelids fluttered shut as sleepiness took over at last.","Slow, rhythmic breathing filled the tranquil room with peace.","Bluey and Mackenzie slept on, drifting into wonderful puppy dreams."],
+      "story2":["A curious pattern of shadows appeared when Bluey entered the bedroom.","Bluey tucked the corners in snug and breathed a peaceful breath.","Bluey wriggled down under the covers and found the cool patch.","Bluey let the busy events of the day fade away like mist.","Tiny stars began to sparkle like glittering lanterns across the heavens.","The quiet room was filled with the soft hum of the evening.","Muffin felt a bit worried about the dark space beneath the bed.","Muffin was having trouble finding the missing puzzle piece.","Muffin came over quickly and offered a helping hand without hesitation.","Together they gathered the scattered pieces and sorted them by size.","They took turns holding the edges steady so nothing slipped away.","With teamwork and care, every little detail fell smoothly into place.","They double-checked their work and gave each other an appreciative nod.","The problem was completely solved, and both puppies smiled warmly.","Muffin snuggled close, safe and content in the familiar room.","A gentle wave of relief washed over them as they hugged goodbye.","The garden settled into a hush as the evening deepened.","Bluey hugged a sleepy lullaby and let go of the day.","They had time to nestle down together in the soft bedroom.","Heavy eyelids fluttered shut as sleepiness took over at last.","The last of the daylight slipped away behind the curtains.","Slow, rhythmic breathing filled the tranquil room with peace.","Bluey and Muffin slept on, drifting into wonderful puppy dreams."],
+      "story3":["A charming evening puzzle began right as Bluey arrived at the quiet bedroom.","Bluey smoothed out the wrinkles in the quilt and rested their head.","Bluey kicked off the daytime shoes and slipped into soft slippers.","Bluey let the busy events of the day fade away like mist.","A pale silver moon climbed above the roof, casting quiet silver ribbons.","Outside, the evening sky turned from dusky purple to deep velvety blue.","Bingo felt a little uncertain about the dark space beneath the bed.","Bingo was having trouble untangling the big pile of dress-up blankets.","Bingo padded over quietly and settled in beside them.","Together they gathered the scattered pieces and sorted them by size.","They took turns holding the edges steady so nothing slipped away.","With teamwork and care, every little detail fell smoothly into place.","They double-checked their work and gave each other an appreciative nod.","The problem was completely solved, and both puppies smiled warmly.","Bingo snuggled close, safe and content in the familiar room.","A gentle wave of relief washed over them as they hugged goodbye.","Everything in the bedroom felt sleepy and calm.","Bluey folded a soft teddy into a cosy corner of the bed.","Soon it would be time to breathe slowly in the dim bedroom.","Heavy eyelids fluttered shut as sleepiness took over at last.","Slow, rhythmic breathing filled the tranquil room with peace.","Bluey and Bingo slept on, drifting into wonderful puppy dreams."]};
+    const VOICES = ["af_heart","af_bella","af_sarah","am_michael","am_adam","bm_george","bf_emma"];
+    const $ = (id) => document.getElementById(id);
+    let loaded = false, current = -1;
+
+    function setStatus(text) { $("nar-play-status").textContent = text; }
+
+    async function ensureLoaded() {
+      if (loaded) return;
+      const bar = $("nar-bar").firstElementChild;
+      $("nar-load-status").textContent = "fetching clips…";
+      await Narration.load((set, frac, meta) => {
+        const base = set === "words" ? 0 : 1;
+        bar.style.width = Math.round((base + frac) / 2 * 100) + "%";
+        $("nar-load-status").textContent = set + (frac ? ` ready (${(meta.bytes / 1048576).toFixed(1)} MB, ${meta.clips} clips)` : " …");
+      });
+      loaded = true;
+      $("nar-load").disabled = true;
+      $("nar-load").textContent = "Narration loaded";
+      const m = Narration.meta();
+      $("nar-load-status").textContent =
+        `${m.words.clips} word clips (${(m.words.bytes / 1048576).toFixed(1)} MB) + ${m.lines.clips} whole-line clips (${(m.lines.bytes / 1048576).toFixed(1)} MB)`;
+      const list = $("nar-wordlist");
+      Narration.words().forEach((w) => list.append(new Option(w, w)));
+      const sel = $("nar-line");
+      Narration.lines().slice(0, 100).forEach((l) => sel.append(new Option(l.slice(0, 90), l)));
+    }
+
+    function renderStory(key, mode) {
+      const lines = STORIES[key];
+      $("nar-read").innerHTML = lines.map((l, i) => {
+        const hot = Narration.ready() && Narration.hasLine(l);
+        const tag = hot && mode !== "words" ? '<span class="tag">line clip</span>' : '<span class="tag words">words</span>';
+        return `<p data-i="${i}">${tag}${l.replace(/[<>&]/g, "")}</p>`;
+      }).join("");
+      if (Narration.ready()) {
+        const hot = lines.filter((l) => Narration.hasLine(l)).length;
+        setStatus(`${lines.length} lines · ${hot} from whole-line clips (${Math.round(hot / lines.length * 100)}%) · ${lines.length - hot} assembled from words`);
+      } else {
+        setStatus(`${lines.length} lines`);
+      }
+    }
+
+    function highlight(i) {
+      document.querySelectorAll("#nar-read p").forEach((p, j) => p.classList.toggle("is-line", j === i));
+      const el = document.querySelector(`#nar-read p[data-i="${i}"]`);
+      if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+
+    $("nar-story").addEventListener("change", () => renderStory($("nar-story").value, $("nar-mode").value));
+    $("nar-mode").addEventListener("change", () => renderStory($("nar-story").value, $("nar-mode").value));
+    $("nar-load").addEventListener("click", async () => {
+      try { await ensureLoaded(); renderStory($("nar-story").value, $("nar-mode").value); }
+      catch (e) { $("nar-load-status").textContent = "could not load: " + e.message; }
+    });
+    $("nar-play").addEventListener("click", async () => {
+      try {
+        await ensureLoaded();
+        const key = $("nar-story").value, mode = $("nar-mode").value;
+        renderStory(key, mode);
+        setStatus("playing…");
+        const report = await Narration.play(STORIES[key], { mode, onLine: highlight });
+        highlight(-1);
+        setStatus(`done · ${report.seconds.toFixed(0)} s of audio · ${report.lineClips} line clips + ${report.wordLines} word-assembled lines` +
+                  (report.missing.length ? ` · ${report.missing.length} words missing a clip` : ""));
+      } catch (e) { setStatus("playback failed: " + e.message); }
+    });
+    $("nar-stop").addEventListener("click", () => { Narration.stop(); highlight(-1); setStatus("stopped"); });
+
+    $("nar-word-play").addEventListener("click", async () => {
+      try {
+        await ensureLoaded();
+        const w = $("nar-word").value.trim().toLowerCase();
+        const info = await Narration.playWord(w);
+        $("nar-word-info").textContent = info
+          ? `clip ${info.seconds.toFixed(2)} s · ~${(info.seconds * 8192 / 1024).toFixed(1)} KiB as 16 kHz ADPCM · ~${(info.seconds * 4096 / 1024).toFixed(1)} KiB as 8 kHz ADPCM`
+          : `"${w}" is not in the 3,450-word table`;
+      } catch (e) { $("nar-word-info").textContent = "failed: " + e.message; }
+    });
+
+    $("nar-line-play").addEventListener("click", async () => {
+      try {
+        await ensureLoaded();
+        const text = $("nar-line").value;
+        const report = await Narration.playLine(text, { mode: "hybrid" });
+        $("nar-line-status").textContent = `whole-line clip · ${report.seconds.toFixed(2)} s`;
+      } catch (e) { $("nar-line-status").textContent = "failed: " + e.message; }
+    });
+    $("nar-line-words").addEventListener("click", async () => {
+      try {
+        await ensureLoaded();
+        const text = $("nar-line").value;
+        const report = await Narration.playLine(text, { mode: "words" });
+        $("nar-line-status").textContent = `assembled from ${text.split(/\s+/).length} word clips · ${report.seconds.toFixed(2)} s`;
+      } catch (e) { $("nar-line-status").textContent = "failed: " + e.message; }
+    });
+
+    (async function buildVoices() {
+      const host = $("nar-voices");
+      for (const v of VOICES) {
+        const wrap = document.createElement("div");
+        const label = document.createElement("div");
+        label.className = "nar-note";
+        label.textContent = v + (v === "af_heart" ? " (shipped library)" : "");
+        const row = document.createElement("div");
+        row.className = "nar-voice";
+        for (const tag of ["words", "line"]) {
+          const b = document.createElement("button");
+          b.className = "nar-btn" + (v === "af_heart" ? " primary" : "");
+          b.textContent = tag === "words" ? "three words" : "one line";
+          const a = new Audio(`audio/voices/${v}_${tag}.mp3`);
+          b.addEventListener("click", () => { Narration.stop(); a.currentTime = 0; a.play(); });
+          row.append(b);
+        }
+        wrap.append(label, row);
+        host.append(wrap);
+      }
+    })();
+
+    renderStory("story1", "hybrid");
+  </script>
+</body>
+</html>
