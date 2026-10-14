@@ -114,6 +114,7 @@
   }
 
   function planLine(line, mode) {
+    if (!ready()) return { source: "none", words: [], missing: [] };
     const key = norm(line);
     if (mode !== "words" && sets.lines && sets.lines.meta.index[key]) {
       return { source: "line", key };
@@ -124,6 +125,7 @@
 
   // Plays a list of lines back to back. Returns when playback ends (or is stopped).
   async function play(lines, opts = {}) {
+    if (!ready()) await load();          // calling play() before load() just waits
     stop();
     const mode = opts.mode || "hybrid";
     const c = audioContext();
@@ -164,6 +166,7 @@
   }
 
   async function playWord(word) {
+    if (!ready()) await load();
     const buf = await clipBuffer("words", norm(word));
     if (!buf) return null;
     stop();
