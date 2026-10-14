@@ -8,8 +8,10 @@
 Each blob is one concatenated CBR MP3 with a JSON index beside it, so the browser
 can slice a single clip out of it and schedule it with Web Audio:
 
-    web/audio/words.mp3 + words.index.json   every word in the closed table
-    web/audio/lines.mp3 + lines.index.json   the hot whole-line clips
+    web/audio/words.mp3 + words.index.json     every word in the closed table
+    web/audio/lines.mp3 + lines.index.json     the hot whole-line clips
+    web/audio/compose.mp3 + compose.index.json phrases cut out of whole sentences, and
+                                               the mid-sentence takes of the slot words
 
 CBR keeps the byte-offset -> time mapping exact (bytes / (bitrate / 8)), which is
 what makes one file per tier possible instead of 3,450 little files.
@@ -81,14 +83,19 @@ def main():
     ap.add_argument("--lines", default="/tmp/narration/lines")
     ap.add_argument("--line-keys", default=None,
                     help="text file of lines to keep in the lines blob (the hot set)")
+    ap.add_argument("--compose", default=None, help="unit WAVs from render_compose.py --stage cut")
     ap.add_argument("--out", required=True)
     ap.add_argument("--words-bitrate", type=int, default=24)
     ap.add_argument("--lines-bitrate", type=int, default=32)
+    ap.add_argument("--compose-bitrate", type=int, default=24)
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    for name, folder, bitrate, only in (("words", args.words, args.words_bitrate, None),
-                                        ("lines", args.lines, args.lines_bitrate, args.line_keys)):
+    sets = [("words", args.words, args.words_bitrate, None),
+            ("lines", args.lines, args.lines_bitrate, args.line_keys)]
+    if args.compose:
+        sets.append(("compose", args.compose, args.compose_bitrate, None))
+    for name, folder, bitrate, only in sets:
         if not os.path.isdir(folder):
             print(f"skip {name}: {folder} not found")
             continue

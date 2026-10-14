@@ -822,8 +822,9 @@
   <script src="story_data.js"></script>
   <script src="story.js"></script>
   <script>
-    // Read the generated story aloud with the device's own rule: whole-line clips where
-    // they exist, word clips for the rest. The clips load on first use (~9 MB).
+    // Read the generated story aloud with the device's own rule: a whole-line clip where one
+    // exists, otherwise the line spliced out of the phrases its template is made of, with
+    // single-word clips only as a last resort. The clips load on first use (~8 MB).
     (() => {
       const btn = document.getElementById("studio-speak");
       const out = document.getElementById("studio-output");
@@ -843,16 +844,20 @@
         if (!story.length) { note.textContent = "generate a story first"; return; }
         try {
           if (!Narration.ready()) {
-            note.textContent = "loading narration clips (≈9 MB, once)…";
+            note.textContent = "loading narration clips (≈8 MB, once)…";
             await Narration.load((set, frac, meta) => {
               note.textContent = "loading narration clips… " + set + (frac ? ` ${(meta.bytes / 1048576).toFixed(1)} MB` : "");
             });
           }
           speaking = true;
           btn.textContent = "Stop reading";
-          const report = await Narration.play(story, { mode: "hybrid", onLine: highlight });
+          const report = await Narration.play(story, { mode: "compose", onLine: highlight });
           speaking = false; btn.textContent = "Read aloud"; highlight(-1);
-          note.textContent = `${report.seconds.toFixed(0)} s · ${report.lineClips} whole-line clips + ${report.wordLines} lines from word clips`;
+          const how = report.lineClips
+            ? `${report.lineClips} whole-line clips + ${report.composedLines} composed from sentence phrases`
+            : `${report.composedLines} lines composed from sentence phrases`;
+          note.textContent = `${report.seconds.toFixed(0)} s · ${how}` +
+            (report.missing.length ? ` · ${report.missing.length} units have no clip` : "");
         } catch (e) {
           speaking = false; btn.textContent = "Read aloud";
           note.textContent = "narration failed: " + e.message;

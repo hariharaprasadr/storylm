@@ -53,11 +53,89 @@ Consequences:
   ≈5.0–5.7 MB at 8 kHz ADPCM and ≈1.9–2.1 MB at Opus 12 kbps — which is what makes
   ADPCM viable again. The cutter must expand the aligned span to the nearest energy
   minimum first, or it clips onsets (measured head-window energy up to 1.9× the clip RMS).
-* The website ships the clips as **two CBR MP3 blobs** the browser can slice and decode
-  with Web Audio: `web/audio/words.mp3` (7.4 MB, 24 kbps) + `web/audio/lines.mp3`
-  (1.5 MB, 32 kbps), each with a `.index.json` (byte offset, length, duration per clip).
+* The website ships the clips as **three CBR MP3 blobs** the browser can slice and decode
+  with Web Audio: `web/audio/lines.mp3` (1.5 MB, 32 kbps), `web/audio/compose.mp3`
+  (6.3 MB, 24 kbps) and — behind its own button, since the composed path replaced it —
+  `web/audio/words.mp3` (7.4 MB, 24 kbps), each with a `.index.json` (byte offset, length,
+  duration per clip).
 
-## 3. How it will sound — measured proxies
+---
+
+## 3. Composed narration: the fix for word-by-word
+
+Word clips alone do not sound like reading. A human listener put it plainly: whole lines
+sound natural, but the words put together sound **"like someone who doesn't know the
+language trying to read it."** The cause is measurable — a bare word clip is a complete
+little utterance, so it ends in a terminal pitch fall (median **−270 Hz/s** over the last
+300 ms, ending 22 Hz below the clip's own median pitch). 3,450 of those in a row is list
+reading.
+
+The fix comes from the same fact that makes the text finite: every line the device can say
+is `template.format(name=…, friend=…, place=…, prop=…, word=…)`. So instead of speaking
+words on their own, **cut the phrases out of real recorded sentences**:
+
+* render each of the **370 templates** once as a whole sentence (the slots filled with one
+  grammatical value), 135.5 min of audio in 9 minutes of CPU;
+* **force-align** the render with Whisper word timestamps (97.4 % of expected words
+  aligned) and cut out every phrase between two slots, snapping both edges to the nearest
+  low-energy sample so a neighbouring word is never clipped;
+* cut each **slot word** (names, friends, places, props, and 2,271 detail words) out of a
+  carrier sentence, where it keeps running instead of falling.
+
+The result is the **composed inventory: 2,744 units, 32.6 min of audio** — 473 phrase takes
+(mean 2.56 s) and 2,271 slot-word takes (mean 0.33 s).
+
+| measurement | word clips (old) | composed units |
+|---|---:|---:|
+| terminal pitch slope, last 300 ms | **−270 Hz/s** | **−5 Hz/s** (slot words) |
+| end of clip vs its own median pitch | −21.7 Hz | +3.3 Hz |
+| mean clip length | 0.658 s | 0.33 s (slot words) / 2.56 s (phrases) |
+| narration pace of a 22-line story | 1.36 w/s (177 s) | **2.87 w/s (~95 s)** |
+| whole-line clips, same story, for reference | — | 2.96 w/s (49 s of 13 lines) |
+
+Composed narration ends up at the **same pace as the whole-line clips**, because the
+phrases keep their internal timing; word-by-word runs at half that pace.
+
+### Coverage
+
+Every distinct line in the corpus reconstructs from the inventory: **4,000 of 4,000
+sampled lines** decompose exactly into phrase units and slot words, with **0 words left
+over** (checked with the same greedy longest-phrase-first matcher the browser and the
+firmware use). Lines are 2–5 units instead of 10–18 word clips.
+
+### What it costs
+
+| configuration | 16 kHz ADPCM | 8 kHz ADPCM | Opus 16 kbps | Opus 12 kbps | 8 MB part |
+|---|---:|---:|---:|---:|---|
+| composed units, full coverage | 14.90 MB | 7.45 MB | 3.73 MB | 2.79 MB | Opus only |
+| **composed + 100 hot lines** | 17.90 MB | 8.95 MB | 4.46 MB | **3.34 MB** | **fits** |
+| 3,450 word clips + 100 hot lines | 20.73 MB | 10.36 MB | 5.06 MB | 3.79 MB | tight |
+
+So on the 8 MB part the recommendation changes shape: **composed units + hot lines at
+Opus 12 kbps is 3.34 MB**, inside the ≈4.4 MB ceiling, and it is *both* smaller and better
+than the word library it replaces. IMA ADPCM is out for this tier unless the detail-word
+pool is pruned hard — the inventory is dominated by the 2,271 slot-word takes.
+
+Playback rule the browser (and the firmware) now uses, in order:
+
+1. a **whole-line clip** if the line is in the hot set;
+2. otherwise **decompose** the line into composed units, longest phrase first, and splice
+   them with 30 ms between units, 140 ms after a comma, 320 ms at the end of a line;
+3. single-word clips only if a unit has no take (not reachable for corpus text).
+
+### Open items for this tier
+
+* Only 2,271 of the 3,450 words have a mid-sentence take: the ones that appear *as slots*.
+  Other words exist only inside phrase takes, which is why the whole word library is no
+  longer needed on the device at all.
+* The `#e` (sentence-final) phrase variant is preferred when a unit ends a sentence;
+  both variants come from the same render.
+* Tuning knobs still open to the ear: the 30 ms unit gap, and how much of the natural
+  pause each cut keeps at its edges (currently one energy-minimum snap, +15/+20 ms).
+
+---
+
+## 4. How it sounded before — measured proxies
 
 I cannot listen to the output; these are acoustic measurements, and the naturalness
 verdict belongs to a human listener. Play the A/B on `narration.html`
@@ -77,7 +155,7 @@ So: complete coverage, one steady voice, no artefacts — but word-by-word narra
 list rhythm and runs ~60 % slower than natural speech, and the fix is the hot-line tier
 (natural prosody for the lines the engine actually uses most).
 
-## 4. Pipeline
+## 5. Pipeline
 
 ```bash
 # once: a Python 3.13 venv (Kokoro's G2P has no 3.14 wheels)
@@ -90,16 +168,22 @@ python3.13 -m venv .venv-tts
 .venv-tts/bin/python training/render_narration.py --what lines  --out /tmp/narration \
     --lines data/narration_lines.txt
 
-# pack for the website (two blobs + indexes) and re-render the WAV previews
+# composed units: render every template + carrier sentence, then cut the phrases out
+.venv-tts/bin/python training/render_compose.py --stage plan   --out /tmp/narration_compose
+.venv-tts/bin/python training/render_compose.py --stage render --out /tmp/narration_compose
+.venv-tts/bin/python training/render_compose.py --stage cut    --out /tmp/narration_compose
+
+# pack for the website (three blobs + indexes)
 .venv-tts/bin/python training/pack_narration.py --words /tmp/narration/words \
-    --lines /tmp/narration/lines --line-keys data/narration_lines.txt --out web/audio
+    --lines /tmp/narration/lines --line-keys data/narration_lines.txt \
+    --compose /tmp/narration_compose/units --out web/audio
 ```
 
 `make narration` runs both steps. The page reads `web/audio/*.index.json` and slices
 clips out of the blob; playback gaps follow the device rules — 45 ms between words,
 140 ms after a comma, 320 ms at the end of a line.
 
-## 5. Open items
+## 6. Open items
 
 1. **Opus decode on the ESP32-S3** — is there CPU/latency budget for a decoder? If not,
    the ADPCM path forces either the carrier-cut render or the top-1,164-word subset.

@@ -26,6 +26,7 @@
     .nar-read p .tag { font-family: var(--font-mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
                        color: var(--accent-ink); margin-right: 8px; }
     .nar-read p .tag.words { color: #31598f; }
+    .nar-read p .tag.phrases { color: #1d7484; }
     .nar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
     table.nar-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     table.nar-table th, table.nar-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line-soft); }
@@ -74,7 +75,8 @@
           assembled word by word. Everything you hear on this page is those clips; no server is involved.
         </p>
         <div class="nar-controls" style="margin-top: 18px;">
-          <button class="nar-btn primary" id="nar-load">Load narration (≈9 MB, once)</button>
+          <button class="nar-btn primary" id="nar-load">Load narration (≈8 MB, once)</button>
+          <button class="nar-btn" id="nar-load-words">+ word library (7.4 MB)</button>
           <span class="nar-status" id="nar-load-status">not loaded yet — the clips are fetched only when you ask</span>
         </div>
         <div class="nar-bar" id="nar-bar"><span></span></div>
@@ -87,10 +89,12 @@
         <div class="nar-card">
           <h3>1 · Play a story</h3>
           <p class="nar-note">
-            Three stories the shipped model actually generated. <strong>Words only</strong> speaks every line
-            by concatenating word clips (complete coverage, list rhythm). <strong>Words + hot lines</strong>
-            plays the ~100 most-used lines from whole-line clips and falls back to words for the rest — the
-            device's real path, and the one that lands at a natural pace.
+            Three stories the shipped model actually generated. <strong>Composed</strong> is the device's path:
+            the 100 most-used lines play as whole-line clips, and every other line is spliced out of the
+            phrases the templates are made of — each phrase cut out of a real recorded sentence, so it keeps
+            sentence prosody and the way it runs on into the next word. <strong>Words only</strong> is the old
+            fallback, kept here because it is the reason the composed units exist: one word at a time, every
+            word is its own little sentence with its own falling pitch.
           </p>
           <div class="nar-controls">
             <select class="nar-select" id="nar-story">
@@ -99,8 +103,8 @@
               <option value="story3">Story 3 — 22 lines</option>
             </select>
             <select class="nar-select" id="nar-mode">
-              <option value="hybrid">Words + hot-line clips</option>
-              <option value="words">Words only</option>
+              <option value="compose">Composed from sentence phrases (device path)</option>
+              <option value="words">Words only — for comparison</option>
             </select>
             <button class="nar-btn primary" id="nar-play">Play</button>
             <button class="nar-btn" id="nar-stop">Stop</button>
@@ -112,9 +116,12 @@
         <div class="nar-card">
           <h3>2 · What this costs on the device</h3>
           <p class="nar-note">
-            Measured from the actual clips: the word library is 3,450 clips, mean 0.658 s (37.8 min of audio);
-            the 100 hot lines are 6.4 min. The 8 MB part leaves about <strong>4.4 MB</strong> for voice
-            (app ≈2.25 MB + INT4 model 1.05 MB + metadata ≈0.2 MB) — the plan currently allocates 2 MB.
+            Measured from the actual clips. The composed inventory is <strong>2,744 units — 473 phrase takes
+            (mean 2.56 s) and 2,271 slot words cut out of sentences (mean 0.33 s) — 32.6 min of audio</strong>,
+            and it covers <em>every</em> line the templates can produce (all 4,000 sampled corpus lines
+            reconstruct exactly, no word falls back). The old word library is 3,450 clips, 37.8 min; the 100 hot
+            lines are 6.4 min. The 8 MB part leaves about <strong>4.4 MB</strong> for voice (app ≈2.25 MB +
+            INT4 model 1.05 MB + metadata ≈0.2 MB).
           </p>
           <div class="table-scroll">
             <table class="nar-table">
@@ -123,44 +130,51 @@
                     <th class="mono">Opus 16 kbps</th><th class="mono">Opus 12 kbps</th><th>8 MB part</th></tr>
               </thead>
               <tbody>
-                <tr><td>100 hot lines only</td><td class="mono">3.00 MB</td><td class="mono">1.50 MB</td><td class="mono">0.73 MB</td><td class="mono">0.55 MB</td><td class="ok">fits</td></tr>
-                <tr><td>all 3,450 words (100 % coverage)</td><td class="mono">17.73 MB</td><td class="mono">8.86 MB</td><td class="mono">4.33 MB</td><td class="mono">3.25 MB</td><td class="no">only Opus</td></tr>
-                <tr><td>all words + 100 hot lines</td><td class="mono">20.73 MB</td><td class="mono">10.36 MB</td><td class="mono">5.06 MB</td><td class="mono">3.79 MB</td><td class="no">Opus 12k</td></tr>
+                <tr><td>composed units, full coverage</td><td class="mono">14.90 MB</td><td class="mono">7.45 MB</td><td class="mono">3.73 MB</td><td class="mono">2.79 MB</td><td class="no">Opus only</td></tr>
+                <tr><td><strong>composed + 100 hot lines</strong></td><td class="mono">17.90 MB</td><td class="mono">8.95 MB</td><td class="mono">4.46 MB</td><td class="mono">3.34 MB</td><td class="ok">Opus 12k — fits</td></tr>
+                <tr><td>all 3,450 words + hot lines (old path)</td><td class="mono">20.73 MB</td><td class="mono">10.36 MB</td><td class="mono">5.06 MB</td><td class="mono">3.79 MB</td><td class="no">Opus 12k, tight</td></tr>
                 <tr><td>top-1,164 words (99 %) + hot lines</td><td class="mono">8.99 MB</td><td class="mono">4.49 MB</td><td class="mono">2.19 MB</td><td class="mono">1.65 MB</td><td class="ok">ADPCM 8k</td></tr>
-                <tr><td>top-700 words (95 %) + hot lines</td><td class="mono">6.54 MB</td><td class="mono">3.27 MB</td><td class="mono">1.60 MB</td><td class="mono">1.20 MB</td><td class="ok">comfortable</td></tr>
+                <tr><td>100 hot lines only</td><td class="mono">3.00 MB</td><td class="mono">1.50 MB</td><td class="mono">0.73 MB</td><td class="mono">0.55 MB</td><td class="ok">fits</td></tr>
               </tbody>
             </table>
           </div>
           <p class="nar-note">
-            The render on this page is the 24 kbps / 32 kbps MP3 the browser can play: 7.4 MB of words and
-            1.5 MB of hot lines, fetched once. The device would store the same clips as IMA ADPCM (no decoder)
-            or Opus (needs a decoder). <strong>Rendering words inside a carrier phrase and cutting them out
-            halves the library</strong> (measured 0.32 s vs 0.658 s per word) — that is what makes 8 kHz ADPCM
-            viable for a 99 % word set.
+            This page streams 1.5 MB of hot lines and 6.3 MB of composed units as CBR MP3 (the word library is
+            a separate 7.4 MB button). The device would store the same clips as IMA ADPCM (no decoder) or Opus
+            (needs a decoder). Cutting the words out of real sentences is both better <em>and</em> smaller:
+            a slot word drops from 0.658 s to 0.33 s, and its terminal pitch slope from −270 Hz/s to −5 Hz/s,
+            which is the difference between reading a list and carrying on with a sentence.
           </p>
         </div>
 
         <div class="nar-card">
           <h3>3 · Hear any word</h3>
-          <p class="nar-note">Every word of the closed table has a clip. Type one (or pick from the list) and hear it.</p>
+          <p class="nar-note">
+            Every word of the closed table has a clip. Hear it <strong>alone</strong> (a complete utterance,
+            falling pitch at the end — this is what makes word-by-word narration sound like list reading) and
+            as the <strong>mid-sentence take</strong> the composed path uses for slot words.
+          </p>
           <div class="nar-controls">
             <input class="nar-input" id="nar-word" list="nar-wordlist" placeholder="e.g. moonlight" size="22">
             <datalist id="nar-wordlist"></datalist>
-            <button class="nar-btn primary" id="nar-word-play">Play word</button>
+            <button class="nar-btn primary" id="nar-word-play">Word alone</button>
+            <button class="nar-btn" id="nar-word-mid">Mid-sentence take</button>
             <span class="nar-status" id="nar-word-info"></span>
           </div>
         </div>
 
         <div class="nar-card">
-          <h3>4 · Whole line vs assembled from words</h3>
+          <h3>4 · One line, three ways</h3>
           <p class="nar-note">
-            The same sentence, played the two ways. The whole-line clip is a natural sentence; the word-by-word
-            assembly is what happens for the lines that are not in the hot set (~40 % of a story's lines).
+            The same sentence as a whole-line clip, composed from its phrases, and assembled word by word.
+            The first is the top tier (only the hot lines have one); the second is what the device does for
+            every other line; the third is why it no longer does that.
           </p>
           <div class="nar-controls">
-            <select class="nar-select" id="nar-line" style="min-width: 420px; max-width: 100%;"></select>
+            <select class="nar-select" id="nar-line" style="min-width: 300px; max-width: 100%;"></select>
             <button class="nar-btn primary" id="nar-line-play">Whole line</button>
-            <button class="nar-btn" id="nar-line-words">Assembled from words</button>
+            <button class="nar-btn" id="nar-line-compose">Composed from phrases</button>
+            <button class="nar-btn" id="nar-line-words">From words</button>
             <span class="nar-status" id="nar-line-status"></span>
           </div>
         </div>
@@ -240,39 +254,66 @@
 
     function setStatus(text) { $("nar-play-status").textContent = text; }
 
+    const MB = (n) => (n / 1048576).toFixed(1) + " MB";
+
+    function reportLoaded() {
+      const m = Narration.meta();
+      const total = m.compose.bytes + m.lines.bytes + (m.words ? m.words.bytes : 0);
+      $("nar-load-status").textContent =
+        `${m.lines.clips} whole-line clips (${MB(m.lines.bytes)}) + ${m.compose.clips} composed units ` +
+        `(${MB(m.compose.bytes)})` + (m.words ? ` + ${m.words.clips} word clips (${MB(m.words.bytes)})` : "") +
+        ` = ${MB(total)}` + (m.words ? "" : " — nothing else is fetched");
+      $("nar-load").disabled = true;
+      $("nar-load").textContent = "Narration loaded";
+    }
+
     async function ensureLoaded() {
       if (loaded) return;
       const bar = $("nar-bar").firstElementChild;
       $("nar-load-status").textContent = "fetching clips…";
       await Narration.load((set, frac, meta) => {
-        const base = set === "words" ? 0 : 1;
+        const base = set === "lines" ? 0 : 1;
         bar.style.width = Math.round((base + frac) / 2 * 100) + "%";
-        $("nar-load-status").textContent = set + (frac ? ` ready (${(meta.bytes / 1048576).toFixed(1)} MB, ${meta.clips} clips)` : " …");
+        $("nar-load-status").textContent = set + (frac ? ` ready (${MB(meta.bytes)}, ${meta.clips} clips)` : " …");
       });
       loaded = true;
-      $("nar-load").disabled = true;
-      $("nar-load").textContent = "Narration loaded";
-      const m = Narration.meta();
-      $("nar-load-status").textContent =
-        `${m.words.clips} word clips (${(m.words.bytes / 1048576).toFixed(1)} MB) + ${m.lines.clips} whole-line clips (${(m.lines.bytes / 1048576).toFixed(1)} MB)`;
-      const list = $("nar-wordlist");
-      Narration.words().forEach((w) => list.append(new Option(w, w)));
+      reportLoaded();
       const sel = $("nar-line");
       Narration.lines().slice(0, 100).forEach((l) => sel.append(new Option(l.slice(0, 90), l)));
     }
 
+    async function ensureWords() {
+      if (Narration.readyWords()) return;
+      $("nar-load-words").disabled = true;
+      $("nar-load-words").textContent = "word library…";
+      await Narration.loadWords((set, frac, meta) => {
+        $("nar-load-status").textContent = frac ? `word library ready (${MB(meta.bytes)}, ${meta.clips} clips)` : "fetching the word library…";
+      });
+      reportLoaded();
+      $("nar-load-words").textContent = "word library loaded";
+      const list = $("nar-wordlist");
+      Narration.words().forEach((w) => list.append(new Option(w, w)));
+    }
+
     function renderStory(key, mode) {
       const lines = STORIES[key];
+      const plans = lines.map((l) => (Narration.ready() ? Narration.plan(l, mode) : null));
       $("nar-read").innerHTML = lines.map((l, i) => {
-        const hot = Narration.ready() && Narration.hasLine(l);
-        const tag = hot && mode !== "words" ? '<span class="tag">line clip</span>' : '<span class="tag words">words</span>';
+        const src = plans[i] && plans[i].source;
+        const tag = src === "line" ? '<span class="tag">line clip</span>'
+          : src === "words" ? '<span class="tag words">words</span>'
+          : src === "compose" ? `<span class="tag phrases">${plans[i].units.length} phrases</span>` : "";
         return `<p data-i="${i}">${tag}${l.replace(/[<>&]/g, "")}</p>`;
       }).join("");
       if (Narration.ready()) {
-        const hot = lines.filter((l) => Narration.hasLine(l)).length;
-        setStatus(`${lines.length} lines · ${hot} from whole-line clips (${Math.round(hot / lines.length * 100)}%) · ${lines.length - hot} assembled from words`);
+        const hot = plans.filter((p) => p.source === "line").length;
+        const units = plans.filter((p) => p.source === "compose").reduce((n, p) => n + p.units.length, 0);
+        setStatus(mode === "words"
+          ? `${lines.length} lines · every one assembled from word clips`
+          : `${lines.length} lines · ${hot} whole-line clips (${Math.round(hot / lines.length * 100)}%) · ` +
+            `${lines.length - hot} composed from ${units} phrases (${(units / Math.max(1, lines.length - hot)).toFixed(1)} per line)`);
       } else {
-        setStatus(`${lines.length} lines`);
+        setStatus(`${lines.length} lines · press “Load narration” to hear the rule`);
       }
     }
 
@@ -288,6 +329,10 @@
       try { await ensureLoaded(); renderStory($("nar-story").value, $("nar-mode").value); }
       catch (e) { $("nar-load-status").textContent = "could not load: " + e.message; }
     });
+    $("nar-load-words").addEventListener("click", async () => {
+      try { await ensureWords(); renderStory($("nar-story").value, $("nar-mode").value); }
+      catch (e) { $("nar-load-status").textContent = "could not load: " + e.message; }
+    });
     $("nar-play").addEventListener("click", async () => {
       try {
         await ensureLoaded();
@@ -296,28 +341,40 @@
         setStatus("playing…");
         const report = await Narration.play(STORIES[key], { mode, onLine: highlight });
         highlight(-1);
-        setStatus(`done · ${report.seconds.toFixed(0)} s of audio · ${report.lineClips} line clips + ${report.wordLines} word-assembled lines` +
-                  (report.missing.length ? ` · ${report.missing.length} words missing a clip` : ""));
+        setStatus(`done · ${report.seconds.toFixed(0)} s of audio · ${report.lineClips} whole-line clips + ` +
+                  `${report.composedLines} composed from ${report.units} phrases` +
+                  (report.wordLines ? ` + ${report.wordLines} word-assembled lines` : "") +
+                  (report.missing.length ? ` · ${report.missing.length} units missing a clip` : ""));
       } catch (e) { setStatus("playback failed: " + e.message); }
     });
     $("nar-stop").addEventListener("click", () => { Narration.stop(); highlight(-1); setStatus("stopped"); });
 
-    $("nar-word-play").addEventListener("click", async () => {
+    async function playOneWord(take) {
       try {
-        await ensureLoaded();
         const w = $("nar-word").value.trim().toLowerCase();
-        const info = await Narration.playWord(w);
+        if (take === "mid") await ensureLoaded(); else await ensureWords();
+        const info = await Narration.playWord(w, { take });
         $("nar-word-info").textContent = info
-          ? `clip ${info.seconds.toFixed(2)} s · ~${(info.seconds * 8192 / 1024).toFixed(1)} KiB as 16 kHz ADPCM · ~${(info.seconds * 4096 / 1024).toFixed(1)} KiB as 8 kHz ADPCM`
-          : `"${w}" is not in the 3,450-word table`;
+          ? `${take === "mid" ? "mid-sentence" : "word alone"} take ${info.seconds.toFixed(2)} s · ` +
+            `~${(info.seconds * 8192 / 1024).toFixed(1)} KiB as 16 kHz ADPCM · ~${(info.seconds * 4096 / 1024).toFixed(1)} KiB as 8 kHz ADPCM`
+          : take === "mid"
+            ? `"${w}" has no mid-sentence take — it only appears inside phrase clips`
+            : `"${w}" is not in the 3,450-word table`;
       } catch (e) { $("nar-word-info").textContent = "failed: " + e.message; }
-    });
+    }
+    $("nar-word-play").addEventListener("click", () => playOneWord("word"));
+    $("nar-word-mid").addEventListener("click", () => playOneWord("mid"));
 
     $("nar-line-play").addEventListener("click", async () => {
       try {
         await ensureLoaded();
         const text = $("nar-line").value;
-        const report = await Narration.playLine(text, { mode: "hybrid" });
+        const p = Narration.plan(text, "compose");
+        if (p.source !== "line") {
+          $("nar-line-status").textContent = "this line is not in the hot set — no whole-line clip exists for it";
+          return;
+        }
+        const report = await Narration.playLine(text, { mode: "compose" });
         $("nar-line-status").textContent = `whole-line clip · ${report.seconds.toFixed(2)} s`;
       } catch (e) { $("nar-line-status").textContent = "failed: " + e.message; }
     });
@@ -325,8 +382,21 @@
       try {
         await ensureLoaded();
         const text = $("nar-line").value;
+        await ensureWords();
         const report = await Narration.playLine(text, { mode: "words" });
         $("nar-line-status").textContent = `assembled from ${text.split(/\s+/).length} word clips · ${report.seconds.toFixed(2)} s`;
+      } catch (e) { $("nar-line-status").textContent = "failed: " + e.message; }
+    });
+
+    $("nar-line-compose").addEventListener("click", async () => {
+      try {
+        await ensureLoaded();
+        const text = $("nar-line").value;
+        const plan = Narration.plan(text, "compose");
+        const report = await Narration.playLine(text, { mode: "compose" });
+        $("nar-line-status").textContent = plan.source === "line"
+          ? `whole-line clip happened to exist and took precedence · ${report.seconds.toFixed(2)} s`
+          : `composed from ${plan.units.length} phrases (${report.seconds.toFixed(2)} s vs a natural reading)`;
       } catch (e) { $("nar-line-status").textContent = "failed: " + e.message; }
     });
 
@@ -352,7 +422,7 @@
       }
     })();
 
-    renderStory("story1", "hybrid");
+    renderStory("story1", "compose");
   </script>
 </body>
 </html>

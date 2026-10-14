@@ -18,7 +18,7 @@ help:
 	@echo "  make train-modal - Real training on a Modal T4 (volumes, run, download)"
 	@echo "  make audit   - Overfitting / memorisation audit of a checkpoint"
 	@echo "  make matrix-toy - Regenerate the web matrix walkthrough's 4-dim toy block"
-	@echo "  make narration - Render the word/line clips and pack them for the web page"
+	@echo "  make narration - Render every narration tier (words, hot lines, composed units)"
 	@echo "  make clean   - Clean cache files"
 
 # The current generation: data/vocab.json (3,509 ids) + data/processed/train_v4.npz.
@@ -80,8 +80,12 @@ narration:
 	$(PY_TTS) training/render_narration.py --what words --out /tmp/narration
 	$(PY_TTS) training/render_narration.py --what lines --out /tmp/narration \
 		--lines data/narration_lines.txt
+	$(PY_TTS) training/render_compose.py --stage plan   --out /tmp/narration_compose
+	$(PY_TTS) training/render_compose.py --stage render --out /tmp/narration_compose
+	$(PY_TTS) training/render_compose.py --stage cut    --out /tmp/narration_compose
 	$(PY_TTS) training/pack_narration.py --words /tmp/narration/words \
-		--lines /tmp/narration/lines --line-keys data/narration_lines.txt --out web/audio
+		--lines /tmp/narration/lines --line-keys data/narration_lines.txt \
+		--compose /tmp/narration_compose/units --out web/audio
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

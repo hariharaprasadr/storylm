@@ -117,7 +117,8 @@ storylm/
 │   ├── export_story.py           # Full fp16 weights + prompts -> web/story_data.js
 │   ├── export_matrix_toy.py      # 4-dim toy block + reference numbers -> web/matrix_toy_data.js
 │   ├── render_narration.py       # Kokoro-82M renders of the word + hot-line clips
-│   ├── pack_narration.py         # clip WAVs -> the two CBR MP3 blobs the site streams
+│   ├── render_compose.py         # templates rendered whole, then the phrases cut out of them
+│   ├── pack_narration.py         # clip WAVs -> the three CBR MP3 blobs the site streams
 │   ├── modal_train.py            # Scalable Cloud GPU training script (Modal)
 │   ├── memorisation.py           # Overfitting / memorisation audit (`make audit`)
 │   └── sample.py                 # Evaluation & sampling harness
@@ -128,7 +129,7 @@ storylm/
 │   ├── matrix_walkthrough.html   # the same block at 4 dimensions, cell by cell, with an inspector
 │   ├── narration.html            # the narration lab: play the clips the device would ship
 │   ├── narration.js              # browser playback rule (hot-line clip, else word clips)
-│   ├── audio/                    # words.mp3 + lines.mp3 blobs and their indexes (~9 MB)
+│   ├── audio/                    # lines.mp3 + compose.mp3 (+ words.mp3) and their indexes (~16 MB)
 │   ├── matrix_toy_data.js        # the toy block's weights (exported from the real checkpoint)
 │   ├── styles.css                # Shared page styles
 │   ├── walkthrough.css           # Walkthrough-specific styles
@@ -141,7 +142,7 @@ storylm/
 └── docs/                         # Technical Specs & Architecture Notes
     ├── training.md               # End-to-end training pipeline (corpus -> pack -> train -> evaluate)
     ├── tiny_model.md             # 2.02M model architecture, memory budget & vocabulary scaling
-    ├── narration.md              # Narration assets: tiers, sizes, measured playback quality
+    ├── narration.md              # Narration assets: tiers, sizes, why words alone fail, measurement
     ├── story_format.md           # Prompt tags & story structure specs
     ├── how_it_works.md           # Engineering deep-dive
     └── review_gaps_and_improvements.md # Model analysis & future roadmap
@@ -191,7 +192,7 @@ This serves `web/index.html`, which features:
   - Watch FFN feature detectors switch on, with the real up/GELU/down arithmetic and a movement table that adds up.
   - Peek via the "logit lens" at what the model would guess after every layer.
   - Map all 3,509 output logits back onto the vocabulary — one cell per word, shaded by its actual score — then roll the seeded sampling dice and read the first line it writes.
-- **Narration lab** (on `narration.html`): hear the story. The page ships the pre-rendered clips — every one of the 3,450 words plus the 100 most-used whole lines, rendered offline with Kokoro-82M — and plays them with the firmware's own rule (a whole-line clip when the line is in the hot set, word clips otherwise). It also shows what each tier costs on the 8 MB part, lets you hear any single word, A/B a whole line against its word-by-word assembly, and audition seven voices. Nothing is fetched until you press Load.
+- **Narration lab** (on `narration.html`): hear the story. The page ships the pre-rendered clips — the 100 most-used whole lines, plus the *composed* inventory: 473 phrases cut out of real recorded sentences and 2,271 slot words cut out of carrier sentences, so a line the templates can produce is spliced from sentence prosody instead of spoken word by word. It plays with the firmware's own rule (whole-line clip, else composed units, else word clips), shows what each tier costs on the 8 MB part, lets you hear any word alone *and* as its mid-sentence take, A/B one line three ways, and audition seven voices. Nothing is fetched until you press Load.
 - **StoryLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
 
 ### 4. Verify KV-Cache Parity & Performance
