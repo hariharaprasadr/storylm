@@ -1,4 +1,4 @@
-.PHONY: help story test web info train train-modal audit corpus corpus-join vocab matrix-toy narration clean
+.PHONY: help story test web info train train-modal audit corpus corpus-join vocab matrix-toy clean
 
 # Use the project venv when it exists; "python" is not on PATH everywhere.
 PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || (command -v python3 || echo python))
@@ -18,7 +18,6 @@ help:
 	@echo "  make train-modal - Real training on a Modal T4 (volumes, run, download)"
 	@echo "  make audit   - Overfitting / memorisation audit of a checkpoint"
 	@echo "  make matrix-toy - Regenerate the web matrix walkthrough's 4-dim toy block"
-	@echo "  make narration - Render every narration tier (words, hot lines, composed units)"
 	@echo "  make clean   - Clean cache files"
 
 # The current generation: data/vocab.json (3,509 ids) + data/processed/train_v4.npz.
@@ -72,20 +71,6 @@ audit:
 matrix-toy:
 	$(PY) training/export_matrix_toy.py --search
 	$(PY) training/export_matrix_toy.py
-
-# Narration clips: rendered offline with Kokoro-82M (needs .venv-tts, python 3.13 —
-# see docs/narration.md), then packed into the two blobs the website streams.
-PY_TTS ?= .venv-tts/bin/python
-narration:
-	$(PY_TTS) training/render_narration.py --what words --out /tmp/narration
-	$(PY_TTS) training/render_narration.py --what lines --out /tmp/narration \
-		--lines data/narration_lines.txt
-	$(PY_TTS) training/render_compose.py --stage plan   --out /tmp/narration_compose
-	$(PY_TTS) training/render_compose.py --stage render --out /tmp/narration_compose
-	$(PY_TTS) training/render_compose.py --stage cut    --out /tmp/narration_compose
-	$(PY_TTS) training/pack_narration.py --words /tmp/narration/words \
-		--lines /tmp/narration/lines --line-keys data/narration_lines.txt \
-		--compose /tmp/narration_compose/units --out web/audio
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
