@@ -314,6 +314,26 @@
       margin-top: 20px;
     }
 
+    .studio-api {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line-soft, var(--line));
+      font-size: 0.86rem;
+      color: var(--muted, var(--faint));
+    }
+
+    .studio-api code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--accent-ink);
+      background: var(--paper-2, transparent);
+      padding: 2px 5px;
+      border-radius: 4px;
+      word-break: break-word;
+    }
+
+    .studio-api-note { display: block; margin-top: 8px; color: var(--faint); font-size: 0.82rem; }
+
     @media (prefers-reduced-motion: reduce) {
       .studio-line.is-new { animation: none; }
       html { scroll-behavior: auto; }

@@ -126,7 +126,8 @@ storylm/
 │   ├── matrix_toy_data.js        # the toy block's weights (exported from the real checkpoint)
 │   ├── styles.css                # Shared page styles
 │   ├── walkthrough.css           # Walkthrough-specific styles
-│   ├── story.js                  # Vanilla-JS port of the model: live in-browser generation
+│   ├── generate_story.js         # generateStory({world,mode,place,theme,seed}) - the model, no DOM
+│   ├── story.js                  # Story Studio widget: chips + reveal, calls generateStory
 │   ├── story_data.js             # Real checkpoint weights, fp16 + base64 (~4.3 MB)
 │   ├── walkthrough.js            # 30-step numeric walkthrough UI (real values, real arithmetic)
 │   ├── wt-trace.js               # Traces the forward pass live from the weights at page load
@@ -185,6 +186,33 @@ This serves `web/index.html`, which features:
   - Peek via the "logit lens" at what the model would guess after every layer.
   - Map all 3,509 output logits back onto the vocabulary — one cell per word, shaded by its actual score — then roll the seeded sampling dice and read the first line it writes.
 - **Narration** (the clips, the lab page and the whole render pipeline) now lives in the device project: `m5stack-sticks3/tinystories` — `docs/narration.md` there, page at `web/narration.html`. It moved when the device project became the place the audio is shipped from; this repository keeps only the story engine, the model and the measurement of what narration costs.
+
+- **One function for the model** (`web/generate_story.js`, no DOM, no build step): the same forward pass the Story Studio runs, callable from a page, the console or Node.
+
+  ```js
+  const story = await generateStory({
+    world: "bluey",      // world id or display name: bluey, gabby, numberblocks, amelia, junie
+    mode: "bedtime",     // one of the world's modes
+    place: "backyard",   // one of the world's places
+    theme: "help",       // one of the nine themes
+    seed: 42             // same seed -> the same story, word for word
+  });
+  story.lines;  // ["Evening settled quietly over the house as Bluey stood in the backyard.", ...]
+  story.text;   // the lines joined by "\n"   ·   story.tokens, story.ms
+  ```
+
+  Browser: `<script src="story_data.js"></script><script src="generate_story.js"></script>` then
+  call it from the console (the live site has it). Node:
+
+  ```js
+  globalThis.window = globalThis;                 // story_data.js writes window.STORY
+  require("./web/story_data.js");
+  const { generateStory } = require("./web/generate_story.js");
+  ```
+
+  Bad inputs throw with the valid list (`unknown place "moon" for world "bluey": expected one of
+  backyard, bedroom, cubby, ...`), and `StoryEngine` still exposes the low-level pieces
+  (`step`, `sample`, `weights`, `config`, `vocab`) that the walkthrough pages trace.
 - **StoryLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
 
 ### 4. Verify KV-Cache Parity & Performance

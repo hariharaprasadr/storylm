@@ -85,6 +85,12 @@
           <button class="studio-go" id="studio-generate" type="button">Tell a story</button>
           <div class="studio-out" id="studio-output"></div>
           <div class="studio-stats" id="studio-stats"></div>
+          <p class="studio-api">
+            Or call it yourself — the button above runs exactly this:
+            <code>await generateStory({ world: "bluey", mode: "bedtime", place: "backyard", theme: "help", seed: 42 })</code>
+            <span class="studio-api-note">returns <code>{ lines, text, world, mode, place, theme, seed, tokens, ms }</code>;
+            a seed makes the story reproducible. Open the console and try it.</span>
+          </p>
         </div>
       </div>
     </section>
@@ -815,6 +821,7 @@
   </footer>
 
   <script src="story_data.js"></script>
+  <script src="generate_story.js"></script>
   <script src="story.js"></script>
 </body>
 </html>
