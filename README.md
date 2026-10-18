@@ -117,6 +117,7 @@ storylm/
 │   ├── export_matrix_toy.py      # 4-dim toy block + reference numbers -> web/matrix_toy_data.js
 │   ├── modal_train.py            # Scalable Cloud GPU training script (Modal)
 │   ├── memorisation.py           # Overfitting / memorisation audit (`make audit`)
+│   ├── check_selection_tables.py # Every selectable value vs the closed token table
 │   └── sample.py                 # Evaluation & sampling harness
 │
 ├── web/                          # Standalone Interactive Web Visualizer
@@ -137,6 +138,7 @@ storylm/
     ├── training.md               # End-to-end training pipeline (corpus -> pack -> train -> evaluate)
     ├── tiny_model.md             # 2.02M model architecture, memory budget & vocabulary scaling
     ├── story_format.md           # Prompt tags & story structure specs
+    ├── selection_tables.md       # Every character, mode, place, theme, prop and friend
     ├── how_it_works.md           # Engineering deep-dive
     └── review_gaps_and_improvements.md # Model analysis & future roadmap
 ```
@@ -213,6 +215,8 @@ This serves `web/index.html`, which features:
   Bad inputs throw with the valid list (`unknown place "moon" for world "bluey": expected one of
   backyard, bedroom, cubby, ...`), and `StoryEngine` still exposes the low-level pieces
   (`step`, `sample`, `weights`, `config`, `vocab`) that the walkthrough pages trace.
+  The full table of characters, modes, places, themes, props and friends is
+  [`docs/selection_tables.md`](docs/selection_tables.md).
 - **StoryLM vs. Regular LLM**: Comprehensive comparative analysis matrix and architectural pillars.
 
 ### 4. Verify KV-Cache Parity & Performance
